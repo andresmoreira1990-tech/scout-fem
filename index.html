@@ -409,6 +409,19 @@ async function syncScoutFemVerificationFlags(){
       }
     }
     await syncCloudPlayerProfiles();
+    if(user?.role==='player' && user?.playerId){
+      const approved=await supaFetch('/rest/v1/player_access_requests?select=requested_profile_id,status&player_email=eq.'+encodeURIComponent(supaSession.user.email)+'&status=eq.approved&limit=1');
+      const ar=approved&&approved[0];
+      if(ar&&ar.requested_profile_id===user.playerId){
+        const p=db.players.find(x=>x.id===user.playerId);
+        if(p){
+          const verification=Object.assign({},p.verification||{},{status:'Verificada',reviewedAt:(p.verification?.reviewedAt)||new Date().toISOString()});
+          p.verification=verification;
+          if(!p.verifiedCurrentClub) p.verifiedCurrentClub=p.currentClub||'';
+          if(!p.verifiedHistory) p.verifiedHistory=JSON.parse(JSON.stringify(p.history||[]));
+        }
+      }
+    }
     save();
   }catch(e){console.warn('No se pudo sincronizar verificación',e.message)}
 }

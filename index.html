@@ -193,10 +193,19 @@ window.requestClaim=function(playerId){
   let m=document.createElement('div');m.className='modal';m.innerHTML=`<div class="modal-card"><div class="title">Reclamar a ${esc(p.firstName+' '+p.lastName)}</div><p class="muted">Crea una cuenta online y envía la solicitud. El administrador podrá verla desde cualquier dispositivo.</p><form id="claimForm" class="form"><label>Nombre legal<input class="input" name="legalName" required value="${esc(p.firstName+' '+p.lastName)}"></label><label>Fecha de nacimiento<input class="input" type="date" name="birthDate" required value="${esc(p.birthDate||'')}"></label><label>Email para tu cuenta<input class="input" type="email" name="email" required></label><label>Contraseña<input class="input" type="password" name="password" required minlength="6"></label><label class="muted" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="consent" required style="width:auto;margin-top:4px"> Confirmo que soy la titular de este perfil y autorizo la revisión de la solicitud.</label><div class="actions"><button type="button" class="btn ghost" onclick="this.closest('.modal').remove()">Cancelar</button><button class="btn">Enviar solicitud</button></div></form></div>`;document.body.appendChild(m);
   m.querySelector('#claimForm').onsubmit=async e=>{e.preventDefault();let f=e.target,b=Object.fromEntries(new FormData(f));let btn=f.querySelector('button.btn:not(.ghost)');btn.disabled=true;btn.textContent='Enviando…';
     try{
-      const su=await supaSignUp(b.email,b.password,{role:'player',player_id:p.id,name:p.firstName+' '+p.lastName});
+      // Si la cuenta ya existe (por ejemplo, porque el registro creó la cuenta pero falló la creación de la solicitud),
+      // reutilizamos esa cuenta iniciando sesión en lugar de bloquear el proceso con 'email ya registrado'.
+      let su=null, uid=null;
+      try{
+        su=await supaSignUp(b.email,b.password,{role:'player',player_id:p.id,name:p.firstName+' '+p.lastName});
+        uid=su?.user?.id || null;
+      }catch(signErr){
+        const si=await supaSignIn(b.email,b.password);
+        uid=si?.user?.id || null;
+        if(!uid) throw signErr;
+      }
       // Con confirmación de email activada, Supabase puede devolver user=null/uid=null aunque la cuenta se haya creado correctamente.
-      // La solicitud puede crearse como anon gracias a la policy de INSERT; añadimos user_id solo si Supabase lo devuelve.
-      const uid=su?.user?.id || null;
+      // La solicitud se crea online y, si tenemos UID, queda vinculada a la cuenta.
       const payload={player_name:p.firstName+' '+p.lastName,player_email:b.email,requested_profile_id:p.id,status:'pending',legal_name:b.legalName,birth_date:b.birthDate};
       if(uid) payload.user_id=uid;
       await cloudCreateRequest(payload);
@@ -235,7 +244,7 @@ async function adminVerifications(c){
     c.innerHTML=html;
   }catch(err){c.innerHTML='<div class="title">Verificaciones</div><div class="card empty">No se pudieron cargar las verificaciones: '+esc(err.message||'error')+'</div>'}
 }
-window.approveCloudRequest=async function(id){try{await cloudUpdateRequest(id,'approved');const rs=await supaFetch('/rest/v1/player_access_requests?select=requested_profile_id&status=eq.approved&id=eq.'+encodeURIComponent(id)+'&limit=1');const r=rs&&rs[0];if(r){const p=db.players.find(x=>x.id===r.requested_profile_id);const verification={status:'Verificada',reviewedAt:new Date().toISOString(),clubConfirmed:false};if(p){p.verification=verification;p.verifiedCurrentClub=p.currentClub||'';p.verifiedHistory=JSON.parse(JSON.stringify(p.history||[]));}try{const row=await cloudPlayerProfile(r.requested_profile_id);if(row){const merged=Object.assign({},row.profile||{},{verification,verifiedCurrentClub:(p&&p.currentClub)||row.profile?.currentClub||'',verifiedHistory:(p&&p.history)||row.profile?.history||[]});await supaFetch('/rest/v1/player_profiles?profile_id=eq.'+encodeURIComponent(r.requested_profile_id),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({profile:merged,updated_at:new Date().toISOString()})});}}catch(e){console.warn('No se pudo guardar la verificación online',e.message)}save()}toast('Solicitud aprobada · perfil verificado');show('verifications')}catch(e){toast(e.message||'No se pudo aprobar')}};
+window.approveCloudRequest=async function(id){try{await cloudUpdateRequest(id,'approved');const rs=await supaFetch('/rest/v1/player_access_requests?select=requested_profile_id&status=eq.approved&id=eq.'+encodeURIComponent(id)+'&limit=1');const r=rs&&rs[0];if(r){const p=db.players.find(x=>x.id===r.requested_profile_id);if(p){p.verification={status:'Verificada',reviewedAt:new Date().toISOString(),clubConfirmed:false};p.verifiedCurrentClub=p.currentClub||'';p.verifiedHistory=JSON.parse(JSON.stringify(p.history||[]));}save()}toast('Solicitud aprobada · perfil verificado');show('verifications')}catch(e){toast(e.message||'No se pudo aprobar')}};
 window.rejectCloudRequest=async function(id){try{await cloudUpdateRequest(id,'rejected');toast('Solicitud rechazada');show('verifications')}catch(e){toast(e.message||'No se pudo rechazar')}};
 async function cloudProfileChangesPending(){return await supaFetch('/rest/v1/player_profile_change_requests?select=*&status=eq.pending&order=created_at.desc')}
 async function cloudProfileChange(id,status){return await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({status,reviewed_at:new Date().toISOString(),reviewed_by:supaSession.user.id})})}
@@ -389,42 +398,20 @@ render();
 async function syncScoutFemVerificationFlags(){
   try{
     if(!supaSession?.access_token) return;
-    if(user?.role==='admin'){
-      const rows=await supaFetch('/rest/v1/player_access_requests?select=requested_profile_id,status&status=eq.approved');
-      for(const r of (rows||[])){
-        const p=db.players.find(x=>x.id===r.requested_profile_id);
-        const verification=Object.assign({},p?.verification||{},{status:'Verificada',reviewedAt:(p?.verification?.reviewedAt)||new Date().toISOString()});
-        if(p){
-          p.verification=verification;
-          if(!p.verifiedCurrentClub) p.verifiedCurrentClub=p.currentClub||'';
-          if(!p.verifiedHistory) p.verifiedHistory=JSON.parse(JSON.stringify(p.history||[]));
-        }
-        try{
-          const row=await cloudPlayerProfile(r.requested_profile_id);
-          if(row){
-            const merged=Object.assign({},row.profile||{},{verification,verifiedCurrentClub:(p&&p.currentClub)||row.profile?.currentClub||'',verifiedHistory:(p&&p.history)||row.profile?.history||[]});
-            await supaFetch('/rest/v1/player_profiles?profile_id=eq.'+encodeURIComponent(r.requested_profile_id),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({profile:merged,updated_at:new Date().toISOString()})});
-          }
-        }catch(e){console.warn('No se pudo sincronizar la verificación online de '+r.requested_profile_id,e.message)}
+    const rows=user?.role==='admin'
+      ? await supaFetch('/rest/v1/player_access_requests?select=requested_profile_id,status,approved_at&status=eq.approved')
+      : await supaFetch('/rest/v1/player_access_requests?select=requested_profile_id,status,approved_at&player_email=eq.'+encodeURIComponent(supaSession.user.email)+'&status=eq.approved&limit=1');
+    (rows||[]).forEach(r=>{
+      const p=db.players.find(x=>x.id===r.requested_profile_id);
+      if(p){
+        const was=p.verification||{};
+        p.verification=Object.assign({},was,{status:'Verificada',reviewedAt:r.approved_at||was.reviewedAt||new Date().toISOString()});
+        if(!p.verifiedCurrentClub) p.verifiedCurrentClub=p.currentClub||'';
+        if(!p.verifiedHistory) p.verifiedHistory=JSON.parse(JSON.stringify(p.history||[]));
       }
-    }
-    await syncCloudPlayerProfiles();
-    if(user?.role==='player' && user?.playerId){
-      const approved=await supaFetch('/rest/v1/player_access_requests?select=requested_profile_id,status&player_email=eq.'+encodeURIComponent(supaSession.user.email)+'&status=eq.approved&limit=1');
-      const ar=approved&&approved[0];
-      if(ar&&ar.requested_profile_id===user.playerId){
-        const p=db.players.find(x=>x.id===user.playerId);
-        if(p){
-          const verification=Object.assign({},p.verification||{},{status:'Verificada',reviewedAt:(p.verification?.reviewedAt)||new Date().toISOString()});
-          p.verification=verification;
-          if(!p.verifiedCurrentClub) p.verifiedCurrentClub=p.currentClub||'';
-          if(!p.verifiedHistory) p.verifiedHistory=JSON.parse(JSON.stringify(p.history||[]));
-        }
-      }
-    }
+    });
     save();
   }catch(e){console.warn('No se pudo sincronizar verificación',e.message)}
 }
 </script>
-<script>setTimeout(async()=>{try{if(supaSession?.access_token && typeof user!=='undefined' && user){await syncScoutFemVerificationFlags();render();}}catch(e){console.warn('No se pudo ejecutar la sincronización de verificación',e.message)}},250);</script>
-</body></html>
+<script>setTimeout(async()=>{try{if(window.user&&window.supaSession){await syncScoutFemVerificationFlags();render();}}catch(e){}},250);</script></body></html>

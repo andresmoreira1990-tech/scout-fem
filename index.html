@@ -306,7 +306,14 @@ render();
     const btn=form.querySelector('button[type=submit]'); if(btn){btn.disabled=true;btn.textContent='Guardando...'}
     try{
       const b=Object.fromEntries(new FormData(form));
-      const p=db.players.find(x=>x.id===user.playerId); if(!p) throw new Error('No se encontró tu perfil');
+      let resolvedPlayerId=user.playerId||'';
+      if(!resolvedPlayerId && supaSession?.user?.email){
+        try{
+          const ar=await supaFetch('/rest/v1/player_access_requests?select=requested_profile_id,player_name,status&player_email=eq.'+encodeURIComponent(supaSession.user.email)+'&status=eq.approved&order=created_at.desc&limit=1');
+          if(ar&&ar[0]?.requested_profile_id){resolvedPlayerId=ar[0].requested_profile_id;user.playerId=resolvedPlayerId;localStorage.setItem('sf_user_demo',JSON.stringify(user));}
+        }catch(_e){}
+      }
+      const p=db.players.find(x=>x.id===resolvedPlayerId); if(!p) throw new Error('No se encontró tu perfil de jugadora');
       const history=readHistory();
       const verifiedClub=p.verifiedCurrentClub!==undefined ? p.verifiedCurrentClub : (p.currentClub||'');
       const verifiedHistory=p.verifiedHistory!==undefined ? p.verifiedHistory : (p.history||[]);
@@ -414,4 +421,84 @@ async function syncScoutFemVerificationFlags(){
   }catch(e){console.warn('No se pudo sincronizar verificación',e.message)}
 }
 </script>
-<script>setTimeout(async()=>{try{if(window.user&&window.supaSession){await syncScoutFemVerificationFlags();render();}}catch(e){}},250);</script></body></html>
+<script>setTimeout(async()=>{try{if(window.user&&window.supaSession){await syncScoutFemVerificationFlags();render();}}catch(e){}},250);</script>
+<script id="sf-save-global-fix-20261007">
+(function(){
+  async function ensurePlayerLink(){
+    if(!window.user || user.role!=='player') return null;
+    if(user.playerId){
+      const local=db.players.find(x=>x.id===user.playerId);
+      if(local) return local;
+    }
+    if(!window.supaSession?.user?.email) return null;
+    const rows=await supaFetch('/rest/v1/player_access_requests?select=requested_profile_id,player_name,status&player_email=eq.'+encodeURIComponent(supaSession.user.email)+'&status=eq.approved&order=created_at.desc&limit=1');
+    const id=rows&&rows[0]?.requested_profile_id;
+    if(!id) return null;
+    user.playerId=id;
+    user.name=rows[0].player_name||user.name;
+    localStorage.setItem('sf_user_demo',JSON.stringify(user));
+    return db.players.find(x=>x.id===id)||null;
+  }
+  async function savePlayerForm(form){
+    if(!form || form.id!=='pf' || !window.user || user.role!=='player') return;
+    const btn=form.querySelector('button[type="submit"]');
+    if(btn && btn.dataset.sfSaving==='1') return;
+    if(btn){btn.dataset.sfSaving='1';btn.disabled=true;btn.textContent='Guardando...'}
+    try{
+      const p=await ensurePlayerLink();
+      if(!p) throw new Error('No se ha podido vincular tu cuenta con tu perfil. Cierra sesión y vuelve a entrar.');
+      const b=Object.fromEntries(new FormData(form));
+      const history=typeof readHistory==='function'?readHistory():(p.history||[]);
+      const verifiedClub=p.verifiedCurrentClub!==undefined?p.verifiedCurrentClub:(p.currentClub||'');
+      const verifiedHistory=p.verifiedHistory!==undefined?p.verifiedHistory:(p.history||[]);
+      const changes={};
+      if((b.currentClub||'')!==verifiedClub) changes.currentClub=b.currentClub||'';
+      if(JSON.stringify(history)!==JSON.stringify(verifiedHistory)) changes.history=history;
+      const next={
+        firstName:b.firstName,lastName:b.lastName,birthDate:b.birthDate,position:b.position,
+        dominantFoot:b.dominantFoot,region:b.region,country:b.country,
+        currentClub:p.currentClub||'',history:p.history||[],status:b.status,
+        economicExpectations:b.economicExpectations,photo:b.photo,
+        videos:(b.videos||'').split('\n').map(x=>x.trim()).filter(Boolean),bio:b.bio
+      };
+      await cloudSavePlayerProfile(p.id,next);
+      Object.assign(p,next);
+      if(changes.currentClub!==undefined || changes.history!==undefined){
+        if(!supaSession?.user?.id) throw new Error('Sesión no válida. Vuelve a iniciar sesión.');
+        const existing=await supaFetch('/rest/v1/player_profile_change_requests?select=id&profile_id=eq.'+encodeURIComponent(p.id)+'&user_id=eq.'+encodeURIComponent(supaSession.user.id)+'&status=eq.pending&limit=1');
+        if(existing&&existing[0]){
+          await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(existing[0].id),{
+            method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({changes})
+          });
+        }else{
+          await supaFetch('/rest/v1/player_profile_change_requests',{
+            method:'POST',headers:{Prefer:'return=representation'},
+            body:JSON.stringify({profile_id:p.id,user_id:supaSession.user.id,changes,status:'pending'})
+          });
+        }
+        toast('Cambios enviados al administrador para validación');
+      }else{
+        toast('Perfil guardado correctamente');
+      }
+      save();
+      localStorage.setItem('sf_user_demo',JSON.stringify(user));
+    }catch(err){
+      toast('No se pudo guardar: '+(err.message||'error'));
+    }finally{
+      if(btn){btn.dataset.sfSaving='';btn.disabled=false;btn.textContent='Guardar cambios'}
+    }
+  }
+  document.addEventListener('click',function(e){
+    const btn=e.target.closest && e.target.closest('#pf button[type="submit"]');
+    if(!btn) return;
+    const form=btn.closest('#pf');
+    if(!form) return;
+    // The form's native submit handler may be replaced by another render cycle.
+    // Force a reliable path for every player account.
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    savePlayerForm(form);
+  },true);
+})();
+</script>
+</body></html>

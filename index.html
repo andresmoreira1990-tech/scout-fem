@@ -386,7 +386,7 @@ render();
 <!-- SF FIX REQUEST 2026-10-07 -->
 
 <script>
-async async function syncScoutFemVerificationFlags(){
+async function syncScoutFemVerificationFlags(){
   try{
     if(!supaSession?.access_token) return;
     const rows=user?.role==='admin'

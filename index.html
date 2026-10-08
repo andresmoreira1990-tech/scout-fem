@@ -412,4 +412,74 @@ async function syncScoutFemVerificationFlags(){
   }catch(e){console.warn('No se pudo sincronizar verificación',e.message)}
 }
 </script>
-<script>setTimeout(async()=>{try{if(window.user&&window.supaSession){await syncScoutFemVerificationFlags();render();}}catch(e){}},250);</script></body></html>
+<script>setTimeout(async()=>{try{if(window.user&&window.supaSession){await syncScoutFemVerificationFlags();render();}}catch(e){}},250);</script>
+<script id="sf-profile-save-final-fix">
+/* Scout Fem · guardado global y persistente del perfil de jugadora */
+(function(){
+  async function savePlayerProfileForm(form){
+    const currentUser = (typeof user !== 'undefined') ? user : null;
+    if(!currentUser || currentUser.role!=='player') throw new Error('Sesión de jugadora no válida. Vuelve a iniciar sesión.');
+    const p=db.players.find(x=>x.id===currentUser.playerId);
+    if(!p) throw new Error('No se encontró tu perfil de jugadora.');
+
+    const btn=form.querySelector('button[type="submit"]');
+    if(btn){btn.disabled=true;btn.textContent='Guardando...';}
+    try{
+      const b=Object.fromEntries(new FormData(form));
+      const history=typeof readHistory==='function' ? readHistory() : (p.history||[]);
+      const verifiedClub=p.verifiedCurrentClub!==undefined ? p.verifiedCurrentClub : (p.currentClub||'');
+      const verifiedHistory=p.verifiedHistory!==undefined ? p.verifiedHistory : (p.history||[]);
+      const clubChanged=(b.currentClub||'')!==verifiedClub;
+      const historyChanged=JSON.stringify(history)!==JSON.stringify(verifiedHistory);
+      const changes={};
+      if(clubChanged) changes.currentClub=b.currentClub||'';
+      if(historyChanged) changes.history=history;
+
+      /* Datos personales/material se guardan inmediatamente. Equipo e historial quedan pendientes de aprobación. */
+      const nextProfile={
+        firstName:b.firstName||'', lastName:b.lastName||'', birthDate:b.birthDate||'',
+        position:b.position||'', dominantFoot:b.dominantFoot||'', region:b.region||'', country:b.country||'',
+        currentClub:p.currentClub||'', history:p.history||[], status:b.status||'',
+        economicExpectations:b.economicExpectations||'', photo:b.photo||'',
+        videos:(b.videos||'').split('\n').map(x=>x.trim()).filter(Boolean), bio:b.bio||''
+      };
+
+      await cloudSavePlayerProfile(p.id,nextProfile);
+      Object.assign(p,nextProfile);
+      currentUser.name=p.firstName+' '+p.lastName;
+      const lu=db.users.find(x=>x.id===currentUser.id);
+      if(lu) lu.name=currentUser.name;
+      localStorage.setItem('sf_user_demo',JSON.stringify(currentUser));
+      save();
+
+      if(Object.keys(changes).length){
+        if(!supaSession?.user?.id) throw new Error('Sesión no válida. Vuelve a iniciar sesión.');
+        const existing=await supaFetch('/rest/v1/player_profile_change_requests?select=id&profile_id=eq.'+encodeURIComponent(p.id)+'&user_id=eq.'+encodeURIComponent(supaSession.user.id)+'&status=eq.pending&limit=1');
+        const payload={profile_id:p.id,user_id:supaSession.user.id,changes,status:'pending'};
+        if(existing&&existing[0]){
+          await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(existing[0].id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({changes})});
+        }else{
+          await supaFetch('/rest/v1/player_profile_change_requests',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});
+        }
+        toast('Perfil guardado. Los cambios de equipo e historial quedan pendientes de validación.');
+      }else{
+        toast('Perfil guardado correctamente');
+      }
+      show('profile');
+    }finally{
+      if(btn){btn.disabled=false;btn.textContent='Guardar cambios';}
+    }
+  }
+
+  document.addEventListener('submit',function(e){
+    const form=e.target;
+    const currentUser=(typeof user!=='undefined')?user:null;
+    if(!form || form.id!=='pf' || !currentUser || currentUser.role!=='player') return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    savePlayerProfileForm(form).catch(err=>toast('No se pudo guardar: '+(err?.message||'error')));
+  },true);
+})();
+</script>
+
+</body></html>

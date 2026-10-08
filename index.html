@@ -116,7 +116,10 @@ async function loadMyCloudPlayerProfile(){
   }
 }
 async function cloudCreateRequest(payload){
-  return await supaFetch('/rest/v1/player_access_requests',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});
+  // La solicitud se crea desde una sesión que puede estar aún sin autenticar.
+  // No pedimos RETURNING porque eso exige una política SELECT para el rol anon.
+  // El administrador leerá la solicitud después desde su sesión autenticada.
+  return await supaFetch('/rest/v1/player_access_requests',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});
 }
 async function cloudMyRequests(){return await supaFetch('/rest/v1/player_access_requests?select=*&order=created_at.desc');}
 async function cloudAdminRequests(){return await supaFetch('/rest/v1/player_access_requests?select=*&order=created_at.desc');}
@@ -188,73 +191,22 @@ function claimExistingPlayer(){
   input.oninput=paint;paint();m.querySelector('#closeClaim').onclick=()=>m.remove();
 }
 
-function claimSuccessScreen(name,email){
-  app.innerHTML=`<div class="login"><div class="login-card" style="max-width:560px;text-align:center">
-    <div style="font-size:48px;margin-bottom:8px">✉️</div>
-    <div class="brand">Scout <span>Fem</span></div>
-    <h2 style="margin:14px 0 8px">Solicitud enviada correctamente</h2>
-    <p class="muted" style="font-size:15px;line-height:1.6">
-      ${esc(name)}, hemos recibido tu solicitud para reclamar tu perfil.
-    </p>
-    <div class="card section" style="text-align:left;margin-top:18px">
-      <b>Ahora tienes que confirmar tu cuenta</b>
-      <p class="muted" style="line-height:1.6;margin-bottom:0">
-        Hemos enviado un correo a <b>${esc(email)}</b> desde <b>no-reply@scoutfem.es</b>.
-        Abre el correo y pulsa el botón de confirmación. Después podrás entrar en Scout Fem con tu email y contraseña.
-      </p>
-    </div>
-    <div class="card section" style="text-align:left">
-      <b>¿Qué ocurre después?</b>
-      <ol class="muted" style="line-height:1.7;margin:8px 0 0 20px">
-        <li>Confirmas tu correo.</li>
-        <li>El administrador recibe tu solicitud en <b>Verificaciones</b>.</li>
-        <li>El administrador revisa y aprueba tu perfil.</li>
-        <li>Cuando esté aprobado aparecerá <b>✓ Perfil verificado</b>.</li>
-      </ol>
-    </div>
-    <p class="muted" style="font-size:12px;margin-top:14px">
-      Si no ves el correo, revisa Spam / Correo no deseado.
-    </p>
-    <div class="actions" style="justify-content:center;margin-top:18px">
-      <button class="btn" id="backLogin">Volver al acceso</button>
-    </div>
-  </div></div>`;
-  document.getElementById('backLogin').onclick=()=>login();
-}
-
 window.requestClaim=function(playerId){
   let p=db.players.find(x=>x.id===playerId);if(!p)return;
   let m=document.createElement('div');m.className='modal';m.innerHTML=`<div class="modal-card"><div class="title">Reclamar a ${esc(p.firstName+' '+p.lastName)}</div><p class="muted">Crea una cuenta online y envía la solicitud. El administrador podrá verla desde cualquier dispositivo.</p><form id="claimForm" class="form"><label>Nombre legal<input class="input" name="legalName" required value="${esc(p.firstName+' '+p.lastName)}"></label><label>Fecha de nacimiento<input class="input" type="date" name="birthDate" required value="${esc(p.birthDate||'')}"></label><label>Email para tu cuenta<input class="input" type="email" name="email" required></label><label>Contraseña<input class="input" type="password" name="password" required minlength="6"></label><label class="muted" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="consent" required style="width:auto;margin-top:4px"> Confirmo que soy la titular de este perfil y autorizo la revisión de la solicitud.</label><div class="actions"><button type="button" class="btn ghost" onclick="this.closest('.modal').remove()">Cancelar</button><button class="btn">Enviar solicitud</button></div></form></div>`;document.body.appendChild(m);
   m.querySelector('#claimForm').onsubmit=async e=>{e.preventDefault();let f=e.target,b=Object.fromEntries(new FormData(f));let btn=f.querySelector('button.btn:not(.ghost)');btn.disabled=true;btn.textContent='Enviando…';
     try{
-      let su;
-      try{
-        su=await supaSignUp(b.email.trim(),b.password,{role:'player',player_id:p.id,name:p.firstName+' '+p.lastName});
-      }catch(signErr){
-        // Si la cuenta ya existía, intentamos iniciar sesión con las mismas credenciales
-        // para recuperar el user_id y poder asociar la reclamación.
-        try{
-          const existing=await supaSignIn(b.email.trim(),b.password);
-          su=existing;
-          localStorage.removeItem('sf_supa_session');
-          supaSession=null;
-        }catch(_){
-          throw signErr;
-        }
-      }
-      const uid=su?.user?.id || su?.id || null;
-      const payload={player_name:p.firstName+' '+p.lastName,player_email:b.email.trim(),requested_profile_id:p.id,status:'pending',legal_name:b.legalName,birth_date:b.birthDate};
+      const su=await supaSignUp(b.email,b.password,{role:'player',player_id:p.id,name:p.firstName+' '+p.lastName});
+      // Con confirmación de email activada, Supabase puede devolver user=null/uid=null aunque la cuenta se haya creado correctamente.
+      // La solicitud puede crearse como anon gracias a la policy de INSERT; añadimos user_id solo si Supabase lo devuelve.
+      const uid=su?.user?.id || null;
+      const payload={player_name:p.firstName+' '+p.lastName,player_email:b.email,requested_profile_id:p.id,status:'pending',legal_name:b.legalName,birth_date:b.birthDate};
       if(uid) payload.user_id=uid;
-      const created=await cloudCreateRequest(payload);
-      if(!created || !Array.isArray(created) || !created[0]) throw new Error('La solicitud no se pudo registrar. Inténtalo de nuevo.');
-      p.verification=Object.assign(verificationState(p),{status:'Pendiente',submittedAt:new Date().toISOString(),reviewedAt:'',legalName:b.legalName,birthDate:b.birthDate,email:b.email.trim(),notes:''});
-      save();
-      m.remove();
-      claimSuccessScreen(p.firstName+' '+p.lastName,b.email.trim());
+      await cloudCreateRequest(payload);
+      p.verification=Object.assign(verificationState(p),{status:'Pendiente',submittedAt:new Date().toISOString(),reviewedAt:'',legalName:b.legalName,birthDate:b.birthDate,email:b.email,notes:''});save();m.remove();toast('Solicitud enviada al administrador');
     }catch(err){btn.disabled=false;btn.textContent='Enviar solicitud';toast(err.message||'No se pudo enviar la solicitud')}
   }
 }
-
 function registerPlayer(){
   let m=document.createElement('div');m.className='modal';m.innerHTML=`<div class="modal-card"><div class="title">Crear cuenta de jugadora</div><p class="muted">Tu cuenta quedará pendiente de verificación. Después podrás completar y editar tu perfil.</p><form id="newPlayerForm" class="form"><div class="row"><label>Nombre<input class="input" name="firstName" required></label><label>Apellidos<input class="input" name="lastName" required></label></div><div class="row"><label>Fecha de nacimiento<input class="input" type="date" name="birthDate" required></label><label>País<input class="input" name="country" value="España"></label></div><label>Email<input class="input" type="email" name="email" required></label><label>Contraseña<input class="input" type="password" name="password" required minlength="6"></label><label>Documento de identidad<input class="input" type="file" name="document" accept="image/*,.pdf" required></label><label>Selfie de verificación<input class="input" type="file" name="selfie" accept="image/*" required></label><label class="muted" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="consent" required style="width:auto;margin-top:4px"> Confirmo que los datos son reales y autorizo la verificación de identidad.</label><div class="actions"><button type="button" class="btn ghost" onclick="this.closest('.modal').remove()">Cancelar</button><button class="btn">Crear cuenta</button></div></form></div>`;document.body.appendChild(m);
   m.querySelector('#newPlayerForm').onsubmit=e=>{e.preventDefault();let f=e.target,b=Object.fromEntries(new FormData(f));if(db.users.some(u=>u.email===b.email))return toast('Ese email ya está registrado');let p={id:'p'+Date.now(),firstName:b.firstName,lastName:b.lastName,position:'',dominantFoot:'Desconocida',region:'',country:b.country||'España',currentClub:'',agency:'',status:'No disponible',economicExpectations:'',photo:'',videos:[],bio:'',history:[],birthDate:b.birthDate,verification:{status:'Pendiente',document:'',selfie:'',submittedAt:new Date().toISOString(),reviewedAt:'',clubConfirmed:false,legalName:b.firstName+' '+b.lastName,birthDate:b.birthDate,email:b.email,notes:''}};let doc=f.document.files[0],self=f.selfie.files[0],rd1=new FileReader(),rd2=new FileReader(),done=0;const finish=()=>{done++;if(done<2)return;p.verification.document=rd1.result;p.verification.selfie=rd2.result;db.players.push(p);db.users.push({id:'u'+Date.now(),email:b.email,password:b.password,name:p.firstName+' '+p.lastName,role:'player',playerId:p.id,active:true});save();m.remove();toast('Cuenta creada. Ya puedes entrar; tu identidad está pendiente de verificación.');login()};rd1.onload=finish;rd2.onload=finish;rd1.readAsDataURL(doc);rd2.readAsDataURL(self)}
@@ -269,7 +221,7 @@ async function adminVerifications(c){
   try{
     const rows=await cloudAdminRequests();
     let changes=[];try{changes=await cloudProfileChangesPending()}catch(e){changes=[]}
-    let html='<div class="title">Verificaciones</div><p class="muted">Solicitudes de perfiles y cambios pendientes.</p><div class="actions" style="margin-top:10px"><button class="btn secondary" id="refreshVerifications">↻ Actualizar solicitudes</button></div>';
+    let html='<div class="title">Verificaciones</div><p class="muted">Solicitudes de perfiles y cambios pendientes.</p>';
     html+='<h3 style="margin-top:20px">Reclamaciones de perfil</h3>';
     if(rows.length){rows.forEach(r=>{
       const name=esc(r.player_name||'Sin nombre'), email=esc(r.player_email||''), status=r.status||'pending', pid=esc(r.requested_profile_id||''), legal=esc(r.legal_name||''), birth=esc(r.birth_date||'');
@@ -284,31 +236,15 @@ async function adminVerifications(c){
       html+='<div class="card section"><div class="profile"><div class="avatar">'+esc(p?initials(p):'JG')+'</div><div><b>'+name+'</b><p class="muted">Cambio pendiente de validación</p></div></div><div class="card" style="margin-top:12px">'+parts.join('')+'</div><div class="actions"><button class="btn" onclick="approveProfileChange(\''+r.id+'\')">✓ Aprobar cambios</button><button class="btn danger" onclick="rejectProfileChange(\''+r.id+'\')">Rechazar</button></div></div>';
     })}else html+='<div class="card empty">No hay cambios pendientes.</div>';
     c.innerHTML=html;
-    const refresh=document.getElementById('refreshVerifications');
-    if(refresh) refresh.onclick=()=>adminVerifications(c);
   }catch(err){c.innerHTML='<div class="title">Verificaciones</div><div class="card empty">No se pudieron cargar las verificaciones: '+esc(err.message||'error')+'</div>'}
 }
-
-let sfVerificationRefreshTimer=null;
-function startVerificationRefresh(){
-  if(sfVerificationRefreshTimer) clearInterval(sfVerificationRefreshTimer);
-  sfVerificationRefreshTimer=setInterval(()=>{
-    if(user?.role==='admin' && document.querySelector('[data-v].active')?.dataset?.v==='verifications'){
-      const c=document.getElementById('content');
-      if(c) adminVerifications(c);
-    }else{
-      clearInterval(sfVerificationRefreshTimer); sfVerificationRefreshTimer=null;
-    }
-  },5000);
-}
-
 window.approveCloudRequest=async function(id){try{await cloudUpdateRequest(id,'approved');const rs=await supaFetch('/rest/v1/player_access_requests?select=requested_profile_id&status=eq.approved&id=eq.'+encodeURIComponent(id)+'&limit=1');const r=rs&&rs[0];if(r){const p=db.players.find(x=>x.id===r.requested_profile_id);if(p){p.verification={status:'Verificada',reviewedAt:new Date().toISOString(),clubConfirmed:false};p.verifiedCurrentClub=p.currentClub||'';p.verifiedHistory=JSON.parse(JSON.stringify(p.history||[]));}save()}toast('Solicitud aprobada · perfil verificado');show('verifications')}catch(e){toast(e.message||'No se pudo aprobar')}};
 window.rejectCloudRequest=async function(id){try{await cloudUpdateRequest(id,'rejected');toast('Solicitud rechazada');show('verifications')}catch(e){toast(e.message||'No se pudo rechazar')}};
 async function cloudProfileChangesPending(){return await supaFetch('/rest/v1/player_profile_change_requests?select=*&status=eq.pending&order=created_at.desc')}
 async function cloudProfileChange(id,status){return await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({status,reviewed_at:new Date().toISOString(),reviewed_by:supaSession.user.id})})}
 window.approveProfileChange=async function(id){try{const rs=await supaFetch('/rest/v1/player_profile_change_requests?select=*&id=eq.'+encodeURIComponent(id)+'&limit=1');const r=rs&&rs[0];if(!r)throw new Error('No se encontró el cambio');let ch=r.changes;if(typeof ch==='string')ch=JSON.parse(ch);const row=await cloudPlayerProfile(r.profile_id);if(row){const merged=Object.assign({},row.profile||{},ch);await supaFetch('/rest/v1/player_profiles?profile_id=eq.'+encodeURIComponent(r.profile_id),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({profile:merged,updated_at:new Date().toISOString()})});}else{throw new Error('El perfil online de la jugadora todavía no existe')}await cloudProfileChange(id,'approved');const p=db.players.find(x=>x.id===r.profile_id);if(p){Object.assign(p,ch);if(Object.prototype.hasOwnProperty.call(ch,'currentClub'))p.verifiedCurrentClub=p.currentClub||'';if(Object.prototype.hasOwnProperty.call(ch,'history'))p.verifiedHistory=JSON.parse(JSON.stringify(p.history||[]));}save();toast('Cambios aprobados y publicados');show('verifications')}catch(e){toast(e.message||'No se pudieron aprobar los cambios')}};
 window.rejectProfileChange=async function(id){try{await cloudProfileChange(id,'rejected');toast('Cambios rechazados');show('verifications')}catch(e){toast(e.message||'No se pudieron rechazar los cambios')}};
-const _show=show;show=function(v){if(v==='verification'){setActive(v);let c=document.getElementById('content');if(c){c.innerHTML='<div class="loading">Cargando…</div>';requestAnimationFrame(()=>{try{playerVerification(c)}catch(err){console.error(err);c.innerHTML='<div class="card empty">No se pudo cargar la verificación.</div>'}})}return}if(v==='verifications'){setActive(v);let c=document.getElementById('content');if(c){c.innerHTML='<div class="loading">Cargando…</div>';requestAnimationFrame(()=>{try{adminVerifications(c);startVerificationRefresh()}catch(err){console.error(err);c.innerHTML='<div class="card empty">No se pudo cargar las verificaciones.</div>'}})}return}_show(v)};
+const _show=show;show=function(v){if(v==='verification'){setActive(v);let c=document.getElementById('content');if(c){c.innerHTML='<div class="loading">Cargando…</div>';requestAnimationFrame(()=>{try{playerVerification(c)}catch(err){console.error(err);c.innerHTML='<div class="card empty">No se pudo cargar la verificación.</div>'}})}return}if(v==='verifications'){setActive(v);let c=document.getElementById('content');if(c){c.innerHTML='<div class="loading">Cargando…</div>';requestAnimationFrame(()=>{try{adminVerifications(c)}catch(err){console.error(err);c.innerHTML='<div class="card empty">No se pudo cargar las verificaciones.</div>'}})}return}_show(v)};
 
 function shell(){app.innerHTML='<div class="shell"><aside class="side"><div class="brand">Scout <span>Fem</span></div><div class="nav">'+menus[user.role].map(([id,t])=>`<button data-v="${id}">${t}</button>`).join('')+'</div><button class="nav logout" id="logout">Cerrar sesión</button></aside><main class="main"><header class="top"><b>Inicio</b></header><div class="content" id="content"></div></main></div>';document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>show(b.dataset.v));document.getElementById('logout').onclick=()=>{localStorage.removeItem('sf_user_demo');localStorage.removeItem('sf_supa_session');supaSession=null;user=null;login()}}
 function render(){if(!user)return login();shell();show(menus[user.role][0][0])} function setActive(v){document.querySelectorAll('[data-v]').forEach(b=>b.classList.toggle('active',b.dataset.v===v))}

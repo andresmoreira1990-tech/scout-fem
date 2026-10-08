@@ -193,6 +193,8 @@ function claimExistingPlayer(){
 
 window.requestClaim=function(playerId){
   let p=db.players.find(x=>x.id===playerId);if(!p)return;
+  // Cerramos la pantalla de búsqueda/reclamación anterior para que el flujo continúe en una sola pantalla.
+  document.querySelectorAll('.modal').forEach(x=>x.remove());
   let m=document.createElement('div');m.className='modal';m.innerHTML=`<div class="modal-card"><div class="title">Reclamar a ${esc(p.firstName+' '+p.lastName)}</div><p class="muted">Crea una cuenta online y envía la solicitud. El administrador podrá verla desde cualquier dispositivo.</p><form id="claimForm" class="form"><label>Nombre legal<input class="input" name="legalName" required value="${esc(p.firstName+' '+p.lastName)}"></label><label>Fecha de nacimiento<input class="input" type="date" name="birthDate" required value="${esc(p.birthDate||'')}"></label><label>Email para tu cuenta<input class="input" type="email" name="email" required></label><label>Contraseña<input class="input" type="password" name="password" required minlength="6"></label><label class="muted" style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="consent" required style="width:auto;margin-top:4px"> Confirmo que soy la titular de este perfil y autorizo la revisión de la solicitud.</label><div class="actions"><button type="button" class="btn ghost" onclick="this.closest('.modal').remove()">Cancelar</button><button class="btn">Enviar solicitud</button></div></form></div>`;document.body.appendChild(m);
   m.querySelector('#claimForm').onsubmit=async e=>{e.preventDefault();let f=e.target,b=Object.fromEntries(new FormData(f));let btn=f.querySelector('button.btn:not(.ghost)');btn.disabled=true;btn.textContent='Enviando…';
     try{

@@ -20,6 +20,13 @@
 #savePlayerProfileBtn{position:relative!important;z-index:10001!important;pointer-events:auto!important;cursor:pointer!important;touch-action:manipulation!important;}
 #pf .field{position:relative;z-index:1;}
 </style>
+
+<style id="sf-profile-save-real-fix">
+#content:has(#pf) .card{position:relative;z-index:2;overflow:visible!important}
+#pf{position:relative;z-index:3;pointer-events:auto!important}
+#pf .actions{position:relative;z-index:4;isolation:isolate;pointer-events:auto!important}
+#savePlayerProfileBtn{display:inline-flex;align-items:center;justify-content:center;position:relative;z-index:5;min-height:44px;min-width:150px;pointer-events:auto!important;touch-action:manipulation;cursor:pointer}
+</style>
 </head><body><div id="app"></div><script>
 const KEY='scoutfem_demo_v1';
 const seed={users:[{id:'u1',email:'admin@scoutfem.local',password:'admin123',name:'Administrador',role:'admin',active:true},{id:'u2',email:'club@scoutfem.local',password:'club123',name:'Atlético Demo',role:'club',clubId:'c1',active:true},{id:'u3',email:'jugadora@scoutfem.local',password:'player123',name:'Aitana Sánchez',role:'player',playerId:'p1',active:true},{id:'u4',email:'agencia@scoutfem.local',password:'agency123',name:'Agencia Demo',role:'agency',agencyId:'a1',active:true}],clubs:[{"id":"c1","name":"Atlético Demo","officialName":"Atlético Demo","shortName":"Atlético Demo","abbreviation":"ATD","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"Galicia","parentClub":"Atlético Demo","type":"principal"},{"id":"c2f02","name":"Real Sporting de Gijón","officialName":"Real Sporting de Gijón","shortName":"Real Sporting de Gijón","abbreviation":"RS Gijón","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"","parentClub":"Real Sporting de Gijón","type":"principal"},{"id":"c2f03","name":"Burgos CF","officialName":"Burgos Club de Fútbol","shortName":"Burgos CF","abbreviation":"BUR","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"","parentClub":"Burgos CF","type":"principal"},{"id":"c2f04","name":"Real Avilés Industrial","officialName":"Real Avilés Industrial","shortName":"Real Avilés Industrial","abbreviation":"AVI","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"","parentClub":"Real Avilés Industrial","type":"principal"},{"id":"c2f05","name":"Eibar B","officialName":"SD Eibar B","shortName":"Eibar B","abbreviation":"EIB B","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"","parentClub":"SD Eibar","type":"filial"},{"id":"c2f06","name":"Deportivo Abanca B","officialName":"Deportivo Abanca B","shortName":"Deportivo Abanca B","abbreviation":"DEP B","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"","parentClub":"Real Club Deportivo Abanca","type":"filial"},{"id":"c2f07","name":"Osasuna B","officialName":"Fundación Club Atlético Osasuna B","shortName":"Osasuna B","abbreviation":"OSA B","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"","parentClub":"Club Atlético Osasuna","type":"filial"},{"id":"c2f08","name":"Victoria CF","officialName":"Victoria CF","shortName":"Victoria CF","abbreviation":"VIC","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"","parentClub":"Victoria CF","type":"principal"},{"id":"c2f09","name":"Racing de Santander","officialName":"Real Racing Club de Santander","shortName":"Racing de Santander","abbreviation":"RAC","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"","parentClub":"Racing de Santander","type":"principal"},{"id":"c2f10","name":"Madrid CFF B","officialName":"Madrid Club de Fútbol Femenino B","shortName":"Madrid CFF B","abbreviation":"MAD B","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"","parentClub":"Madrid Club de Fútbol Femenino","type":"filial"},{"id":"c2f11","name":"CD Arratia","officialName":"CD Arratia","shortName":"CD Arratia","abbreviation":"ARR","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"","parentClub":"CD Arratia","type":"principal"},{"id":"c2f12","name":"Real Oviedo","officialName":"Real Oviedo","shortName":"Real Oviedo","abbreviation":"OVI","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"","parentClub":"Real Oviedo","type":"principal"},{"id":"c2f13","name":"As Celtas","officialName":"As Celtas","shortName":"As Celtas","abbreviation":"CEL","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"","parentClub":"As Celtas","type":"principal"},{"id":"c2f14","name":"Rayo Vallecano","officialName":"Fundación Rayo Vallecano","shortName":"Rayo Vallecano","abbreviation":"RAY","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"","parentClub":"Rayo Vallecano","type":"principal"},{"id":"c2f15","name":"Bizkerre","officialName":"Bizkerre Club","shortName":"Bizkerre","abbreviation":"BIZ","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 1","season":"2026/27","region":"","parentClub":"Bizkerre","type":"principal"},{"id":"c2f17","name":"Ona Sant Adrià","officialName":"FC Ona Sant Adrià","shortName":"Ona Sant Adrià","abbreviation":"ONA","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 2","season":"2026/27","region":"","parentClub":"Ona Sant Adrià","type":"principal"},{"id":"c2f18","name":"Villaviciosa de Odón","officialName":"AD Villaviciosa de Odón","shortName":"Villaviciosa de Odón","abbreviation":"VDO","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 2","season":"2026/27","region":"","parentClub":"Villaviciosa de Odón","type":"principal"},{"id":"c2f19","name":"AEM Lleida","officialName":"SE AEM Lleida","shortName":"AEM Lleida","abbreviation":"AEM","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 2","season":"2026/27","region":"","parentClub":"AEM Lleida","type":"principal"},{"id":"c2f20","name":"Europa","officialName":"CE Europa","shortName":"Europa","abbreviation":"EUR","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 2","season":"2026/27","region":"","parentClub":"Europa","type":"principal"},{"id":"c2f21","name":"Barcelona C","officialName":"FC Barcelona C","shortName":"Barcelona C","abbreviation":"BAR C","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 2","season":"2026/27","region":"","parentClub":"FC Barcelona","type":"filial"},{"id":"c2f22","name":"Levante B","officialName":"Levante UD B","shortName":"Levante B","abbreviation":"LEV B","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 2","season":"2026/27","region":"","parentClub":"Levante UD","type":"filial"},{"id":"c2f23","name":"Huesca","officialName":"SD Huesca","shortName":"Huesca","abbreviation":"HUE","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 2","season":"2026/27","region":"","parentClub":"Huesca","type":"principal"},{"id":"c2f24","name":"Zaragoza CFF","officialName":"Zaragoza CFF","shortName":"Zaragoza CFF","abbreviation":"ZAR","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 2","season":"2026/27","region":"","parentClub":"Zaragoza CFF","type":"principal"},{"id":"c2f25","name":"Valencia Féminas B","officialName":"Valencia Féminas CF B","shortName":"Valencia Féminas B","abbreviation":"VAL B","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 2","season":"2026/27","region":"","parentClub":"Valencia CF","type":"filial"},{"id":"c2f26","name":"Elche CF","officialName":"Elche CF","shortName":"Elche CF","abbreviation":"ELC","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 2","season":"2026/27","region":"","parentClub":"Elche CF","type":"principal"},{"id":"c2f27","name":"Murcia Promises","officialName":"Murcia Promises CF","shortName":"Murcia Promises","abbreviation":"MUR","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 2","season":"2026/27","region":"","parentClub":"Murcia Promises","type":"principal"},{"id":"c2f28","name":"CD Samper","officialName":"CD Samper","shortName":"CD Samper","abbreviation":"SAM","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 2","season":"2026/27","region":"","parentClub":"CD Samper","type":"principal"},{"id":"c2f29","name":"Espanyol B","officialName":"RCD Espanyol de Barcelona B","shortName":"Espanyol B","abbreviation":"ESP B","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 2","season":"2026/27","region":"","parentClub":"RCD Espanyol de Barcelona","type":"filial"},{"id":"c2f30","name":"Baleares FC","officialName":"Baleares FC","shortName":"Baleares FC","abbreviation":"BAL","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 2","season":"2026/27","region":"","parentClub":"Baleares FC","type":"principal"},{"id":"c2f31","name":"Guiniguada Apolinario","officialName":"Guiniguada Apolinario CD","shortName":"Guiniguada Apolinario","abbreviation":"GAP","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"Guiniguada Apolinario","type":"principal"},{"id":"c2f32","name":"Féminas Soliss Fuensalida","officialName":"EM Féminas Soliss Fuensalida","shortName":"Féminas Soliss Fuensalida","abbreviation":"FUE","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"Féminas Soliss Fuensalida","type":"principal"},{"id":"c2f33","name":"Córdoba CF","officialName":"Córdoba CF","shortName":"Córdoba CF","abbreviation":"COR","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"Córdoba CF","type":"principal"},{"id":"c2f34","name":"CD Arguual","officialName":"CD Arguual","shortName":"CD Arguual","abbreviation":"ARG","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"CD Arguual","type":"principal"},{"id":"c2f35","name":"Femarguín","officialName":"CD Femarguín","shortName":"Femarguín","abbreviation":"FEM","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"Femarguín","type":"principal"},{"id":"c2f36","name":"Spar Gran Canaria","officialName":"Spar Gran Canaria","shortName":"Spar Gran Canaria","abbreviation":"SPAR","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"Spar Gran Canaria","type":"principal"},{"id":"c2f37","name":"Cacereño Femenino Atlético","officialName":"Cacereño Femenino Atlético","shortName":"Cacereño Femenino Atlético","abbreviation":"CAC","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"Cacereño Femenino Atlético","type":"principal"},{"id":"c2f38","name":"Sporting Club","officialName":"CD Sporting Club","shortName":"Sporting Club","abbreviation":"SCL","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"Sporting Club","type":"principal"},{"id":"c2f39","name":"Unión Viera","officialName":"CF Unión Viera","shortName":"Unión Viera","abbreviation":"VIE","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"Unión Viera","type":"principal"},{"id":"c2f40","name":"Almería","officialName":"UD Almería","shortName":"Almería","abbreviation":"ALM","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"Almería","type":"principal"},{"id":"c2f41","name":"Getafe Femenino","officialName":"CD Getafe Femenino","shortName":"Getafe Femenino","abbreviation":"GET","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"Getafe CF","type":"principal"},{"id":"c2f42","name":"Real Betis Féminas","officialName":"Sección Deportiva Fundación Real Betis Balompié","shortName":"Real Betis Féminas","abbreviation":"BET","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"Real Betis Balompié","type":"principal"},{"id":"c2f43","name":"Olimpia Las Rozas","officialName":"CD BFF Olimpia Las Rozas","shortName":"Olimpia Las Rozas","abbreviation":"OLR","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"Olimpia Las Rozas","type":"principal"},{"id":"c2f44","name":"Málaga CF","officialName":"Málaga CF","shortName":"Málaga CF","abbreviation":"MAL","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"Málaga CF","type":"principal"},{"id":"c2f45","name":"Pozuelo de Alarcón","officialName":"CF Pozuelo de Alarcón","shortName":"Pozuelo de Alarcón","abbreviation":"POZ","category":"Segunda Federación","competition":"Segunda Federación Femenina","group":"Grupo 3","season":"2026/27","region":"","parentClub":"Pozuelo de Alarcón","type":"principal"}],agencies:[{id:'a1',name:'Agencia Demo',contact:'María García',phone:'+34 600 000 000',email:'contacto@agenciademo.es',website:'',description:'Agencia de representación deportiva.'}],players:[{id:'p1',firstName:'Aitana',lastName:'Sánchez',position:'Delantera',dominantFoot:'Diestra',region:'Galicia',country:'España',currentClub:'Atlético Demo',agency:'Agencia Demo',status:'Abierta a ofertas',economicExpectations:'A convenir',photo:'',videos:[],bio:'Delantera de perfil asociativo y buena movilidad.',history:[{club:'Atlético Demo',from:'2024/25',to:'2025/26',categories:['Segunda Federación']},{club:'Deportivo Demo',from:'2023/24',to:'2023/24',categories:['Primera Federación']},{club:'Celta Demo',from:'2022/23',to:'2022/23',categories:['Segunda Federación']}]},{id:'p2',firstName:'Lucía',lastName:'Pérez',position:'Mediocentro',dominantFoot:'Zurda',region:'Galicia',country:'España',currentClub:'Atlético Demo',agency:'',status:'No disponible',economicExpectations:'',photo:'',videos:[],bio:'Mediocentro zurda.',history:[{club:'Atlético Demo',from:'2025/26',to:'2025/26',categories:['Segunda Federación']}]},{id:'p3',firstName:'Marta',lastName:'López',position:'Central',dominantFoot:'Ambas',region:'Asturias',country:'España',currentClub:'Sporting Demo',agency:'',status:'Abierta a ofertas',economicExpectations:'A convenir',photo:'',videos:[],bio:'Central con buena salida de balón.',history:[{club:'Sporting Demo',from:'2025/26',to:'2026/27',categories:['Segunda Federación']},{club:'Oviedo Demo',from:'2024/25',to:'2024/25',categories:['Primera Nacional']}]},{id:'p4',firstName:'Inês',lastName:'Costa',position:'Extremo',dominantFoot:'Diestra',region:'Galicia',country:'Portugal',currentClub:'Braga Demo',agency:'Agencia Demo',status:'Disponible',economicExpectations:'',photo:'',videos:[],bio:'Extremo rápida y vertical.',history:[{club:'Braga Demo',from:'2025/26',to:'2026/27',categories:['Liga F']},{club:'Benfica Demo',from:'2024/25',to:'2024/25',categories:['Liga F']}]}],follows:[],representationRequests:[]};
@@ -332,49 +339,7 @@ function profile(c){
   if(file) file.onchange=()=>{const f=file.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{const photoInput=document.querySelector('#pf [name=photo]');if(photoInput)photoInput.value=rd.result;const av=document.getElementById('previewPhoto');if(av)av.src=rd.result};rd.readAsDataURL(f)};
   wireHistoryEditor();
 
-  const saveBtn=document.getElementById('savePlayerProfileBtn');
-  if(saveBtn) saveBtn.onclick=async function(){
-    const btn=this;
-    if(btn.dataset.saving==='1') return;
-    btn.dataset.saving='1'; btn.disabled=true; btn.textContent='Guardando...';
-    try{
-      if(!user || user.role!=='player' || !user.playerId) throw new Error('No se ha encontrado tu cuenta de jugadora. Vuelve a iniciar sesión.');
-      if(!supaSession?.access_token || !supaSession?.user?.id) throw new Error('Sesión no válida. Vuelve a iniciar sesión.');
-      const form=document.getElementById('pf');
-      const b=Object.fromEntries(new FormData(form));
-      const history=typeof readHistory==='function'?readHistory():(p.history||[]);
-      const verifiedClub=p.verifiedCurrentClub!==undefined?p.verifiedCurrentClub:(p.currentClub||'');
-      const verifiedHistory=p.verifiedHistory!==undefined?p.verifiedHistory:(p.history||[]);
-      const changes={};
-      if((b.currentClub||'')!==verifiedClub) changes.currentClub=b.currentClub||'';
-      if(JSON.stringify(history)!==JSON.stringify(verifiedHistory)) changes.history=history;
-      const nextProfile={
-        firstName:b.firstName||'',lastName:b.lastName||'',birthDate:b.birthDate||'',position:b.position||'',
-        dominantFoot:b.dominantFoot||'',region:b.region||'',country:b.country||'',currentClub:p.currentClub||'',
-        history:p.history||[],status:b.status||'',economicExpectations:b.economicExpectations||'',photo:b.photo||'',
-        videos:(b.videos||'').split('\\n').map(x=>x.trim()).filter(Boolean),bio:b.bio||''
-      };
-      await cloudSavePlayerProfile(p.id,nextProfile);
-      Object.assign(p,nextProfile);
-      user.name=p.firstName+' '+p.lastName;
-      const lu=db.users.find(x=>x.id===user.id); if(lu) lu.name=user.name;
-      localStorage.setItem('sf_user_demo',JSON.stringify(user));
-      save();
-      if(Object.keys(changes).length){
-        const existing=await supaFetch('/rest/v1/player_profile_change_requests?select=id&profile_id=eq.'+encodeURIComponent(p.id)+'&user_id=eq.'+encodeURIComponent(supaSession.user.id)+'&status=eq.pending&limit=1');
-        const payload={profile_id:p.id,user_id:supaSession.user.id,changes,status:'pending'};
-        if(existing&&existing[0]) await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(existing[0].id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({changes})});
-        else await supaFetch('/rest/v1/player_profile_change_requests',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});
-        toast('Perfil guardado. Los cambios de equipo e historial quedan pendientes de validación.');
-      }else toast('Perfil guardado correctamente');
-      show('profile');
-    }catch(err){
-      console.error('SCOUT FEM · guardar perfil',err);
-      toast('No se pudo guardar: '+(err.message||'error'));
-    }finally{
-      btn.dataset.saving=''; btn.disabled=false; btn.textContent='Guardar cambios';
-    }
-  };
+
 }
 function playerRequests(c){let reqs=db.representationRequests.filter(r=>r.playerId===user.playerId&&r.status==='Pendiente').map(r=>({...r,agency:db.agencies.find(a=>a.id===r.agencyId)}));c.innerHTML=`<div class="title">Solicitudes</div><p class="muted">Las agencias necesitan tu aceptación para aparecer como tu representante.</p>${reqs.length?reqs.map(r=>`<div class="card section"><b>${esc(r.agency.name)}</b><p class="muted">${esc(r.agency.description||'')}</p><div class="actions"><button class="btn ghost" onclick="rejectReq('${r.id}')">Rechazar</button><button class="btn" onclick="acceptReq('${r.id}')">Aceptar representación</button></div></div>`).join(''):'<div class="card empty">No tienes solicitudes pendientes.</div>'}`}
 window.acceptReq=id=>{let r=db.representationRequests.find(x=>x.id===id),a=db.agencies.find(x=>x.id===r.agencyId),p=db.players.find(x=>x.id===r.playerId);p.agency=a.name;r.status='Aceptada';save();show('requests');toast('Representación aceptada')};window.rejectReq=id=>{let r=db.representationRequests.find(x=>x.id===id);r.status='Rechazada';save();show('requests');toast('Solicitud rechazada')};
@@ -512,73 +477,69 @@ async function syncScoutFemVerificationFlags(){
 }
 </script>
 <script>setTimeout(async()=>{try{if(window.user&&window.supaSession){await syncScoutFemVerificationFlags();render();}}catch(e){}},250);</script>
-<script id="sf-profile-save-final-fix">
-/* Scout Fem · guardado global y persistente del perfil de jugadora */
+
+
+\n<script id="sf-profile-save-single-handler">
 (function(){
-  async function savePlayerProfileForm(form){
+  let saving = false;
+  document.addEventListener('click', async function(e){
+    const btn = e.target && e.target.closest ? e.target.closest('#savePlayerProfileBtn') : null;
+    if(!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(saving) return;
     const currentUser = (typeof user !== 'undefined') ? user : null;
-    if(!currentUser || currentUser.role!=='player') throw new Error('Sesión de jugadora no válida. Vuelve a iniciar sesión.');
-    const p=db.players.find(x=>x.id===currentUser.playerId);
-    if(!p) throw new Error('No se encontró tu perfil de jugadora.');
-
-    const btn=form.querySelector('button[type="submit"]');
-    if(btn){btn.disabled=true;btn.textContent='Guardando...';}
-    try{
-      const b=Object.fromEntries(new FormData(form));
-      const history=typeof readHistory==='function' ? readHistory() : (p.history||[]);
-      const verifiedClub=p.verifiedCurrentClub!==undefined ? p.verifiedCurrentClub : (p.currentClub||'');
-      const verifiedHistory=p.verifiedHistory!==undefined ? p.verifiedHistory : (p.history||[]);
-      const clubChanged=(b.currentClub||'')!==verifiedClub;
-      const historyChanged=JSON.stringify(history)!==JSON.stringify(verifiedHistory);
-      const changes={};
-      if(clubChanged) changes.currentClub=b.currentClub||'';
-      if(historyChanged) changes.history=history;
-
-      /* Datos personales/material se guardan inmediatamente. Equipo e historial quedan pendientes de aprobación. */
-      const nextProfile={
+    const form = document.getElementById('pf');
+    if(!form) { toast('No se encuentra el formulario del perfil.'); return; }
+    saving = true;
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+    try {
+      if(!currentUser || currentUser.role !== 'player' || !currentUser.playerId) throw new Error('No se ha encontrado tu cuenta de jugadora. Vuelve a iniciar sesión.');
+      if(!supaSession?.access_token || !supaSession?.user?.id) throw new Error('Sesión no válida. Cierra sesión y vuelve a entrar.');
+      const p = db.players.find(x => x.id === currentUser.playerId);
+      if(!p) throw new Error('No se ha encontrado tu perfil de jugadora.');
+      const b = Object.fromEntries(new FormData(form));
+      const history = typeof readHistory === 'function' ? readHistory() : (p.history || []);
+      const verifiedClub = p.verifiedCurrentClub !== undefined ? p.verifiedCurrentClub : (p.currentClub || '');
+      const verifiedHistory = p.verifiedHistory !== undefined ? p.verifiedHistory : (p.history || []);
+      const changes = {};
+      if((b.currentClub || '') !== verifiedClub) changes.currentClub = b.currentClub || '';
+      if(JSON.stringify(history) !== JSON.stringify(verifiedHistory)) changes.history = history;
+      const nextProfile = {
         firstName:b.firstName||'', lastName:b.lastName||'', birthDate:b.birthDate||'',
         position:b.position||'', dominantFoot:b.dominantFoot||'', region:b.region||'', country:b.country||'',
         currentClub:p.currentClub||'', history:p.history||[], status:b.status||'',
         economicExpectations:b.economicExpectations||'', photo:b.photo||'',
         videos:(b.videos||'').split('\n').map(x=>x.trim()).filter(Boolean), bio:b.bio||''
       };
-
-      await cloudSavePlayerProfile(p.id,nextProfile);
-      Object.assign(p,nextProfile);
-      currentUser.name=p.firstName+' '+p.lastName;
-      const lu=db.users.find(x=>x.id===currentUser.id);
-      if(lu) lu.name=currentUser.name;
-      localStorage.setItem('sf_user_demo',JSON.stringify(currentUser));
+      await cloudSavePlayerProfile(p.id, nextProfile);
+      Object.assign(p, nextProfile);
+      currentUser.name = p.firstName + ' ' + p.lastName;
+      const localUser = db.users.find(x => x.id === currentUser.id);
+      if(localUser) localUser.name = currentUser.name;
+      localStorage.setItem('sf_user_demo', JSON.stringify(currentUser));
       save();
-
-      if(Object.keys(changes).length){
-        if(!supaSession?.user?.id) throw new Error('Sesión no válida. Vuelve a iniciar sesión.');
-        const existing=await supaFetch('/rest/v1/player_profile_change_requests?select=id&profile_id=eq.'+encodeURIComponent(p.id)+'&user_id=eq.'+encodeURIComponent(supaSession.user.id)+'&status=eq.pending&limit=1');
-        const payload={profile_id:p.id,user_id:supaSession.user.id,changes,status:'pending'};
-        if(existing&&existing[0]){
-          await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(existing[0].id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({changes})});
-        }else{
-          await supaFetch('/rest/v1/player_profile_change_requests',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});
+      if(Object.keys(changes).length) {
+        const existing = await supaFetch('/rest/v1/player_profile_change_requests?select=id&profile_id=eq.'+encodeURIComponent(p.id)+'&user_id=eq.'+encodeURIComponent(supaSession.user.id)+'&status=eq.pending&limit=1');
+        if(existing && existing[0]) {
+          await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(existing[0].id), {method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({changes})});
+        } else {
+          await supaFetch('/rest/v1/player_profile_change_requests', {method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({profile_id:p.id,user_id:supaSession.user.id,changes,status:'pending'})});
         }
         toast('Perfil guardado. Los cambios de equipo e historial quedan pendientes de validación.');
-      }else{
-        toast('Perfil guardado correctamente');
-      }
+      } else toast('Perfil guardado correctamente');
       show('profile');
-    }finally{
-      if(btn){btn.disabled=false;btn.textContent='Guardar cambios';}
+    } catch(err) {
+      console.error('Scout Fem · Guardar cambios', err);
+      toast('No se pudo guardar: ' + (err && err.message ? err.message : 'error inesperado'));
+    } finally {
+      saving = false;
+      const fresh = document.getElementById('savePlayerProfileBtn');
+      if(fresh) { fresh.disabled = false; fresh.textContent = 'Guardar cambios'; }
     }
-  }
-
-  document.addEventListener('submit',function(e){
-    const form=e.target;
-    const currentUser=(typeof user!=='undefined')?user:null;
-    if(!form || form.id!=='pf' || !currentUser || currentUser.role!=='player') return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    savePlayerProfileForm(form).catch(err=>toast('No se pudo guardar: '+(err?.message||'error')));
-  },true);
+  }, true);
 })();
 </script>
 
-\n<script id="sf-final-player-save-fix">\n(function(){\n  async function savePlayerProfileFinal(form){\n    const btn=form.querySelector('button[type="submit"]');\n    if(btn){btn.disabled=true;btn.textContent='Guardando...'}\n    try{\n      if(!user || user.role!=='player' || !user.playerId) throw new Error('No se ha encontrado tu cuenta de jugadora. Vuelve a iniciar sesión.');\n      if(!supaSession?.access_token || !supaSession?.user?.id) throw new Error('Sesión no válida. Vuelve a iniciar sesión.');\n      const b=Object.fromEntries(new FormData(form));\n      const p=db.players.find(x=>x.id===user.playerId);\n      if(!p) throw new Error('No se ha encontrado tu perfil de jugadora.');\n      const history=typeof readHistory==='function'?readHistory():(p.history||[]);\n      const verifiedClub=p.verifiedCurrentClub!==undefined?p.verifiedCurrentClub:(p.currentClub||'');\n      const verifiedHistory=p.verifiedHistory!==undefined?p.verifiedHistory:(p.history||[]);\n      const changes={};\n      if((b.currentClub||'')!==verifiedClub) changes.currentClub=b.currentClub||'';\n      if(JSON.stringify(history)!==JSON.stringify(verifiedHistory)) changes.history=history;\n      const next={firstName:b.firstName||'',lastName:b.lastName||'',birthDate:b.birthDate||'',position:b.position||'',dominantFoot:b.dominantFoot||'',region:b.region||'',country:b.country||'',currentClub:p.currentClub||'',history:p.history||[],status:b.status||'',economicExpectations:b.economicExpectations||'',photo:b.photo||'',videos:(b.videos||'').split('\\n').map(x=>x.trim()).filter(Boolean),bio:b.bio||''};\n      await cloudSavePlayerProfile(p.id,next);\n      Object.assign(p,next);\n      user.name=p.firstName+' '+p.lastName;\n      localStorage.setItem('sf_user_demo',JSON.stringify(user));\n      save();\n      if(Object.keys(changes).length){\n        const existing=await supaFetch('/rest/v1/player_profile_change_requests?select=id&profile_id=eq.'+encodeURIComponent(p.id)+'&user_id=eq.'+encodeURIComponent(supaSession.user.id)+'&status=eq.pending&limit=1');\n        const payload={changes};\n        if(existing&&existing[0]) await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(existing[0].id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(payload)});\n        else await supaFetch('/rest/v1/player_profile_change_requests',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({profile_id:p.id,user_id:supaSession.user.id,changes,status:'pending'})});\n        toast('Perfil guardado. Los cambios de equipo e historial quedan pendientes de validación.');\n      }else toast('Perfil guardado correctamente');\n      show('profile');\n    }catch(err){\n      console.error('SCOUT FEM · guardar perfil',err);\n      toast('No se pudo guardar: '+(err.message||'error'));\n    }finally{if(btn){btn.disabled=false;btn.textContent='Guardar cambios'}}\n  }\n  document.addEventListener('click',function(e){\n    const btn=e.target.closest&&e.target.closest('#pf button[type="submit"]');\n    if(!btn)return;\n    const form=btn.closest('form#pf');\n    if(!form)return;\n    e.preventDefault();\n    e.stopImmediatePropagation();\n    savePlayerProfileFinal(form);\n  },true);\n})();\n</script>\n</body></html>
+</body></html>

@@ -360,47 +360,36 @@ function adminRepresentations(c){let rs=db.representationRequests.map(r=>{let a=
 window.adminAcceptReq=id=>{let r=db.representationRequests.find(x=>x.id===id),a=db.agencies.find(x=>x.id===r.agencyId),p=db.players.find(x=>x.id===r.playerId);if(!r||!a||!p)return;r.status='Aceptada por administrador';p.agency=a.name;save();show('representations');toast('Representación aceptada por el administrador')};window.adminRejectReq=id=>{let r=db.representationRequests.find(x=>x.id===id);if(!r)return;r.status='Rechazada por administrador';save();show('representations');toast('Solicitud rechazada')};
 function adminAgencies(c){c.innerHTML=`<div class="title">Agencias</div><div class="card table-wrap"><table class="table"><thead><tr><th>Agencia</th><th>Contacto</th><th>Email</th><th></th></tr></thead><tbody>${db.agencies.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.contact)}</td><td>${esc(x.email)}</td><td><button class="btn secondary" onclick="editAgency('${x.id}')">Editar</button> <button class="btn danger" onclick="deleteAgency('${x.id}')">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`};window.editAgency=id=>{let x=db.agencies.find(a=>a.id===id);x.name=prompt('Nombre',x.name)||x.name;x.contact=prompt('Persona de contacto',x.contact)||x.contact;x.phone=prompt('Teléfono',x.phone)||x.phone;x.email=prompt('Email',x.email)||x.email;x.description=prompt('Descripción',x.description)||x.description;save();show('agencies')};window.deleteAgency=id=>{if(!confirm('¿Eliminar agencia?'))return;db.agencies=db.agencies.filter(x=>x.id!==id);db.players.forEach(p=>{if(p.agency===db.agencies.find(a=>a.id===id)?.name)p.agency=''});save();show('agencies')};
 async function users(c){
-  c.innerHTML='<div class="title">Usuarios</div><p class="muted">Cuentas de acceso de Scout Fem, incluidas las jugadoras registradas online.</p><div class="card empty">Cargando usuarios…</div>';
-  const merged=new Map();
-  // Conserva las cuentas locales/demo existentes.
-  (db.users||[]).forEach(x=>{
-    const email=String(x.email||'').trim().toLowerCase();
-    const key=email||('local:'+x.id);
-    merged.set(key,{id:x.id,name:x.name||x.email||'Usuario',email:x.email||'',role:x.role||'player',active:x.active!==false,playerId:x.playerId||'',source:'local/demo'});
-  });
-  // scout_users contiene la relación segura con Auth (no necesariamente email/nombre).
-  // No se solicitan columnas que quizá no existan en esa tabla.
+  c.innerHTML='<div class="title">Usuarios</div><p class="muted">Solo cuentas registradas en Supabase Authentication.</p><div class="card empty">Cargando cuentas reales…</div>';
   try{
-    const cloud=await supaFetch('/rest/v1/scout_users?select=id,role');
-    (cloud||[]).forEach(x=>{
-      const local=[...merged.values()].find(u=>u.supabaseId===x.id||u.id===('supabase:'+x.id));
-      if(local){local.role=x.role||local.role;local.source='online';}
-    });
-  }catch(e){console.warn('No se pudo leer scout_users',e.message)}
-  // Las solicitudes de reclamación guardan el email y nombre de las cuentas de jugadoras.
-  // Así se muestran también las cuentas que todavía no tienen fila en scout_users.
-  try{
-    const claims=await supaFetch('/rest/v1/player_access_requests?select=player_name,player_email,requested_profile_id,user_id,status,created_at&order=created_at.desc');
-    (claims||[]).forEach(r=>{
-      const email=String(r.player_email||'').trim().toLowerCase();
-      if(!email)return;
-      const existing=merged.get(email);
-      const player=db.players.find(p=>p.id===r.requested_profile_id);
-      const name=(player?(player.firstName+' '+player.lastName):'')||r.player_name||email;
-      if(existing){
-        existing.name=existing.name||name;
-        existing.role='player';
-        existing.playerId=existing.playerId||r.requested_profile_id||'';
-        existing.source='online';
-        existing.claimStatus=r.status||existing.claimStatus||'';
-      }else{
-        merged.set(email,{id:r.user_id||('claim:'+email),name,email,role:'player',active:true,playerId:r.requested_profile_id||'',source:'online',claimStatus:r.status||''});
-      }
-    });
-  }catch(e){console.warn('No se pudieron cargar las cuentas de jugadoras desde reclamaciones',e.message)}
-  const rows=[...merged.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name),'es'));
-  c.innerHTML='<div class="title">Usuarios</div><p class="muted">Cuentas locales y online. Las jugadoras pueden tener cuenta aunque su reclamación esté pendiente.</p><div class="card table-wrap"><table class="table"><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th>Cuenta / reclamación</th></tr></thead><tbody>'+
-    (rows.length?rows.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.email)+'</td><td><span class="pill purple">'+esc(x.role)+'</span></td><td>'+(x.active?'Activo':'Inactivo')+'</td><td><span class="pill green">'+(x.source==='online'?'Online':'Local/demo')+'</span>'+(x.claimStatus?' <span class="pill '+(x.claimStatus==='approved'?'green':x.claimStatus==='pending'?'yellow':'gray')+'">'+esc(x.claimStatus==='approved'?'Reclamación aceptada':x.claimStatus==='pending'?'Reclamación pendiente':x.claimStatus==='rejected'?'Reclamación rechazada':x.claimStatus)+'</span>':'')+'</td></tr>').join(''):'<tr><td colspan="5">No hay usuarios registrados.</td></tr>')+'</tbody></table></div>';
+    if(!supaSession?.access_token || !supaSession?.user?.id) throw new Error('Inicia sesión de nuevo como administrador para cargar las cuentas reales.');
+    // Esta tabla se sincroniza desde auth.users mediante el trigger configurado en Supabase.
+    // La lista se construye SOLO a partir de scout_auth_users: no se añaden usuarios locales
+    // ni solicitudes de reclamación que no tengan una cuenta real en Supabase Auth.
+    const authRows=await supaFetch('/rest/v1/scout_auth_users?select=id,email,display_name,created_at,last_sign_in_at,synced_at&order=created_at.asc');
+    const accounts=Array.isArray(authRows)?authRows:[];
+    // Datos auxiliares para identificar el rol y asociar el nombre del perfil, sin añadir cuentas.
+    let scoutRows=[],claims=[];
+    try{scoutRows=await supaFetch('/rest/v1/scout_users?select=id,role');}catch(e){console.warn('No se pudieron leer los roles de scout_users',e.message)}
+    try{claims=await supaFetch('/rest/v1/player_access_requests?select=player_name,player_email,requested_profile_id,status,created_at&order=created_at.desc');}catch(e){console.warn('No se pudieron leer datos auxiliares de reclamaciones',e.message)}
+    const rows=accounts.map(a=>{
+      const email=String(a.email||'').trim();
+      const key=email.toLowerCase();
+      const authId=a.id;
+      const scout=scoutRows.find(x=>x.id===authId);
+      const claim=claims.find(x=>String(x.player_email||'').trim().toLowerCase()===key);
+      const local=db.users.find(x=>String(x.email||'').trim().toLowerCase()===key);
+      const player=claim?db.players.find(p=>p.id===claim.requested_profile_id):null;
+      const name=(a.display_name||'').trim()||
+        (player?(player.firstName+' '+player.lastName):'')||
+        (claim&&claim.player_name)|| (local&&local.name)||email||'Cuenta sin nombre';
+      return {id:authId,name,email,role:(scout&&scout.role)||(claim?'player':(local&&local.role)||'Sin rol'),createdAt:a.created_at,lastSignIn:a.last_sign_in_at,claimStatus:claim?claim.status:'',source:'auth'};
+    }).sort((a,b)=>String(a.name).localeCompare(String(b.name),'es'));
+    c.innerHTML='<div class="title">Usuarios</div><p class="muted">Se muestran exclusivamente las cuentas que existen en Supabase Authentication. Los perfiles deportivos y las solicitudes sin cuenta no aparecen aquí.</p><div class="card table-wrap"><table class="table"><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Cuenta</th><th>Último acceso</th></tr></thead><tbody>'+
+      (rows.length?rows.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.email)+'</td><td><span class="pill purple">'+esc(x.role)+'</span></td><td><span class="pill green">Cuenta real</span></td><td>'+esc(x.lastSignIn?new Date(x.lastSignIn).toLocaleString('es-ES'):'Todavía no ha iniciado sesión')+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">No hay cuentas sincronizadas desde Supabase Authentication.</td></tr>')+'</tbody></table></div>';
+  }catch(err){
+    c.innerHTML='<div class="title">Usuarios</div><div class="card empty">No se pudieron cargar las cuentas reales: '+esc(err.message||'error')+'. Comprueba que has iniciado sesión como administrador y que la tabla scout_auth_users tiene la política de lectura para administradores.</div>';
+  }
 }
 window.editUser=id=>{let x=db.users.find(u=>u.id===id);x.name=prompt('Nombre',x.name)||x.name;x.email=prompt('Email',x.email)||x.email;let pass=prompt('Contraseña',x.password);if(pass!==null&&pass!=='')x.password=pass;x.active=confirm('¿Usuario activo? Aceptar = activo, Cancelar = inactivo');save();show('users')};window.deleteUser=id=>{if(id===user.id){toast('No puedes eliminar tu propio usuario');return}if(!confirm('¿Eliminar este usuario?'))return;db.users=db.users.filter(x=>x.id!==id);save();show('users')};
 

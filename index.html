@@ -649,10 +649,11 @@ async function syncScoutFemVerificationFlags(){
       if(!p) throw new Error('No se ha encontrado tu perfil de jugadora.');
       const b = Object.fromEntries(new FormData(form));
       const history = typeof readHistory === 'function' ? readHistory() : (p.history || []);
-      const verifiedClub = p.verifiedCurrentClub !== undefined ? p.verifiedCurrentClub : (p.currentClub || '');
       const verifiedHistory = p.verifiedHistory !== undefined ? p.verifiedHistory : (p.history || []);
       const changes = {};
-      if((b.currentClub || '') !== verifiedClub) changes.currentClub = b.currentClub || '';
+      // El club vigente de la ficha es la referencia efectiva. No usar verifiedCurrentClub aquí:
+      // puede quedar desfasado y provocar que la solicitud omita el club que la jugadora acaba de elegir.
+      if((b.currentClub || '').trim() !== (p.currentClub || '').trim()) changes.currentClub = (b.currentClub || '').trim();
       if(JSON.stringify(history) !== JSON.stringify(verifiedHistory)) changes.history = history;
       const nextProfile = {
         firstName:b.firstName||'', lastName:b.lastName||'', birthDate:b.birthDate||'',

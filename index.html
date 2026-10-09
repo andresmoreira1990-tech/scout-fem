@@ -160,7 +160,7 @@ function login(){
   document.getElementById('login').onsubmit=async e=>{e.preventDefault();
     try{
       const sess=await supaSignIn(email.value.trim(),password.value);
-      const rows=await supaFetch('/rest/v1/scout_users?select=id,role&id=eq.'+encodeURIComponent(sess.user.id));
+      const rows=await supaFetch('/rest/v1/scout_users?select=id,role,player_id&id=eq.'+encodeURIComponent(sess.user.id));
       const sr=rows&&rows[0];
       if(sr && sr.role==='admin'){
         user={id:'supabase:'+sess.user.id,email:sess.user.email,name:'Administrador',role:'admin',active:true,supabaseId:sess.user.id};
@@ -168,6 +168,16 @@ function login(){
         let local=db.users.find(x=>x.email===sess.user.email);
         user=local||{id:'supabase:'+sess.user.id,email:sess.user.email,name:sess.user.email,role:sr.role,active:true,supabaseId:sess.user.id};
         user.supabaseId=sess.user.id;
+        // La asociación con el perfil deportivo debe venir de scout_users para las cuentas online.
+        if(sr.role==='player' && sr.player_id) user.playerId=sr.player_id;
+        if(sr.role==='player' && !user.playerId){
+          const linked=await supaFetch('/rest/v1/player_access_requests?select=requested_profile_id,player_name,status,identity_verified&player_email=eq.'+encodeURIComponent(sess.user.email)+'&status=eq.approved&order=created_at.desc&limit=1');
+          const link=linked&&linked[0];
+          if(link&&link.requested_profile_id){
+            user.playerId=link.requested_profile_id;
+            user.name=link.player_name||user.name||sess.user.email;
+          }
+        }
       }else{
         // Una jugadora aprobada puede no tener aún fila en scout_users.
         // La vinculación real queda registrada en player_access_requests.
@@ -254,7 +264,11 @@ async function adminVerifications(c){
     if(changes.length){changes.forEach(r=>{
       const p=db.players.find(x=>x.id===r.profile_id); const name=esc(p?(p.firstName+' '+p.lastName):(r.profile_id||'Jugadora')); let ch=r.changes||{}; if(typeof ch==='string'){try{ch=JSON.parse(ch)}catch(e){ch={}}}
       let parts=[]; if(Object.prototype.hasOwnProperty.call(ch,'currentClub')) parts.push('<div><b>Equipo actual solicitado:</b> '+esc(ch.currentClub||'Sin club')+'</div>');
-      if(Object.prototype.hasOwnProperty.call(ch,'history')) parts.push('<div style="margin-top:8px"><b>Historial deportivo solicitado:</b><pre style="white-space:pre-wrap;margin:6px 0">'+esc(JSON.stringify(ch.history,null,2))+'</pre></div>');
+      if(Object.prototype.hasOwnProperty.call(ch,'history')){
+        const hist=Array.isArray(ch.history)?ch.history:[];
+        const historyHtml=hist.length?hist.map(h=>'<div style="padding:10px 0;border-bottom:1px solid #edf0f4"><b>'+esc(h.club||'Equipo sin indicar')+'</b><div class="muted" style="margin-top:4px">'+esc([h.from,h.to].filter(Boolean).join(' – ')||'Temporada sin indicar')+' · '+esc((h.categories||[h.category].filter(Boolean)).join(', ')||'Categoría sin indicar')+'</div></div>').join(''):'<p class="muted">No se ha indicado historial deportivo.</p>';
+        parts.push('<div style="margin-top:8px"><b>Historial deportivo solicitado:</b><div style="margin-top:6px">'+historyHtml+'</div></div>');
+      }
       html+='<div class="card section"><div class="profile"><div class="avatar">'+esc(p?initials(p):'JG')+'</div><div><b>'+name+'</b><p class="muted">Cambio pendiente de validación</p></div></div><div class="card" style="margin-top:12px">'+parts.join('')+'</div><div class="actions"><button class="btn" onclick="approveProfileChange(\''+r.id+'\')">✓ Aprobar cambios</button><button class="btn danger" onclick="rejectProfileChange(\''+r.id+'\')">Rechazar</button></div></div>';
     })}else html+='<div class="card empty">No hay cambios pendientes.</div>';
     c.innerHTML=html;
@@ -297,6 +311,10 @@ window.openClubProfile=id=>{let x=db.clubs.find(c=>c.id===id);if(!x)return;let p
 window.openAgencyProfile=id=>{let a=db.agencies.find(x=>x.id===id);if(!a)return;let ps=db.players.filter(p=>p.agency===a.name);let m=document.createElement('div');m.className='modal';m.innerHTML=`<div class="modal-card"><div class="profile"><div class="avatar">${a.logo?`<img src="${esc(a.logo)}">`:initials({firstName:a.name,lastName:''})}</div><div><div class="title" style="margin:0">${esc(a.name)}</div><p class="muted">${esc(a.description||'')}</p></div></div><div class="card"><p><b>Persona de contacto:</b> ${esc(a.contact||'')}</p><p><b>Email:</b> ${esc(a.email||'')}</p><p><b>Teléfono:</b> ${esc(a.phone||'')}</p><p><b>Web:</b> ${esc(a.website||'')}</p><p><b>Jugadoras representadas:</b> ${ps.length}</p></div><div class="actions"><button class="btn ghost" onclick="this.closest('.modal').remove()">Cerrar</button></div></div>`;document.body.appendChild(m)};
 function profile(c){
   const p=db.players.find(x=>x.id===user.playerId);
+  if(!p){
+    c.innerHTML='<div class="title">Mi perfil</div><div class="card empty">No se ha encontrado la ficha deportiva asociada a esta cuenta. Cierra sesión y vuelve a entrar para actualizar la asociación. Si el problema continúa, el administrador debe vincular esta cuenta con el perfil correcto.</div>';
+    return;
+  }
   c.innerHTML=`<div class="title">Mi perfil ${verificationBadge(p)}</div>
   <p class="muted">Tus datos, foto y material deportivo.</p>
   ${(p.verifiedCurrentClub!==undefined && p.currentClub!==p.verifiedCurrentClub)?'<div class="card" style="margin-bottom:12px"><span class="pill yellow">Cambio de equipo pendiente de validación</span></div>':''}

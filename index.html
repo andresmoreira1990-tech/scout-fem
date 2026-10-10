@@ -564,9 +564,9 @@ render();
       const b=Object.fromEntries(new FormData(form));
       const p=db.players.find(x=>x.id===user.playerId); if(!p) throw new Error('No se encontró tu perfil');
       const history=readHistory();
-      const verifiedClub=p.verifiedCurrentClub!==undefined ? p.verifiedCurrentClub : (p.currentClub||'');
+      const verifiedClub=p.currentClub||'';
       const verifiedHistory=p.verifiedHistory!==undefined ? p.verifiedHistory : (p.history||[]);
-      const clubChanged=(b.currentClub||'')!==verifiedClub;
+      const clubChanged=(b.currentClub||'').trim()!==verifiedClub.trim();
       const historyChanged=JSON.stringify(history)!==JSON.stringify(verifiedHistory);
       const changes={};
       if(clubChanged) changes.currentClub=b.currentClub||'';
@@ -575,13 +575,10 @@ render();
       const next={firstName:b.firstName,lastName:b.lastName,birthDate:b.birthDate,position:b.position,dominantFoot:b.dominantFoot,region:b.region,country:b.country,currentClub:p.currentClub||'',history:p.history||[],status:b.status,economicExpectations:b.economicExpectations,photo:b.photo,videos:(b.videos||'').split('\n').map(x=>x.trim()).filter(Boolean),bio:b.bio};
       await cloudSavePlayerProfile(p.id,next); Object.assign(p,next); save();
       if(Object.keys(changes).length){
-        if(!supaSession?.user?.id) throw new Error('Sesión no válida. Vuelve a iniciar sesión.');
-        const existing=await supaFetch('/rest/v1/player_profile_change_requests?select=id&profile_id=eq.'+encodeURIComponent(p.id)+'&user_id=eq.'+encodeURIComponent(supaSession.user.id)+'&status=eq.pending&limit=1');
-        if(existing&&existing[0]){
-          await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(existing[0].id),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({changes})});
-        }else{
-          await supaFetch('/rest/v1/player_profile_change_requests',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({profile_id:p.id,user_id:supaSession.user.id,changes,status:'pending'})});
-        }
+        if(!supaSession?.access_token || !supaSession?.user?.id) throw new Error('Sesión no válida. Vuelve a iniciar sesión.');
+        await supaFetch('/rest/v1/rpc/submit_player_profile_change_request',{
+          method:'POST',body:JSON.stringify({p_profile_id:p.id,p_changes:changes})
+        });
         toast('Cambios enviados al administrador para validación');
       }else toast('Perfil guardado correctamente');
       show('profile');

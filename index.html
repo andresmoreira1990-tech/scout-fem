@@ -291,9 +291,50 @@ async function cloudProfileChangesPending(){
     return true;
   });
 }
-async function cloudProfileChange(id,status){return await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({status,reviewed_at:new Date().toISOString(),reviewed_by:supaSession.user.id})})}
-window.approveProfileChange=async function(id){try{const rs=await supaFetch('/rest/v1/player_profile_change_requests?select=*&id=eq.'+encodeURIComponent(id)+'&limit=1');const r=rs&&rs[0];if(!r)throw new Error('No se encontró el cambio');if(r.status!=='pending')throw new Error('Esta solicitud ya no está pendiente; actualiza la pantalla.');let ch=r.changes;if(typeof ch==='string')ch=JSON.parse(ch);if(!ch||typeof ch!=='object'||Array.isArray(ch))throw new Error('Los datos del cambio no tienen un formato válido.');const row=await cloudPlayerProfile(r.profile_id);if(!row)throw new Error('El perfil online de la jugadora todavía no existe');const merged=Object.assign({},row.profile||{},ch);const updated=await supaFetch('/rest/v1/player_profiles?profile_id=eq.'+encodeURIComponent(r.profile_id),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({profile:merged,updated_at:new Date().toISOString()})});if(!Array.isArray(updated)||!updated.length)throw new Error('Supabase no confirmó la actualización del perfil. El cambio sigue pendiente; revisa las políticas UPDATE de player_profiles.');await cloudProfileChange(id,'approved');const p=db.players.find(x=>x.id===r.profile_id);if(p){Object.assign(p,ch);if(Object.prototype.hasOwnProperty.call(ch,'currentClub'))p.verifiedCurrentClub=p.currentClub||'';if(Object.prototype.hasOwnProperty.call(ch,'history'))p.verifiedHistory=JSON.parse(JSON.stringify(p.history||[]));}save();toast('Cambios aprobados y publicados');show('verifications')}catch(e){console.error('Scout Fem · aprobar cambio de perfil',e);toast(e.message||'No se pudieron aprobar los cambios')}};
-window.rejectProfileChange=async function(id){try{await cloudProfileChange(id,'rejected');toast('Cambios rechazados');show('verifications')}catch(e){toast(e.message||'No se pudieron rechazar los cambios')}};
+window.approveProfileChange=async function(id){
+  try{
+    if(!supaSession?.access_token || !supaSession?.user?.id) throw new Error('Sesión no válida. Vuelve a iniciar sesión.');
+    const rs=await supaFetch('/rest/v1/player_profile_change_requests?select=*&id=eq.'+encodeURIComponent(id)+'&limit=1');
+    const r=rs&&rs[0];
+    if(!r) throw new Error('No se encontró el cambio');
+    if(r.status!=='pending') throw new Error('Esta solicitud ya no está pendiente; actualiza la pantalla.');
+    let ch=r.changes;
+    if(typeof ch==='string') ch=JSON.parse(ch);
+    if(!ch||typeof ch!=='object'||Array.isArray(ch)) throw new Error('Los datos del cambio no tienen un formato válido.');
+    // La RPC comprueba el rol admin y actualiza perfil + solicitud en una transacción.
+    await supaFetch('/rest/v1/rpc/review_player_profile_change_request',{
+      method:'POST',
+      body:JSON.stringify({p_request_id:id,p_decision:'approved'})
+    });
+    const p=db.players.find(x=>x.id===r.profile_id);
+    if(p){
+      Object.assign(p,ch);
+      if(Object.prototype.hasOwnProperty.call(ch,'currentClub')) p.verifiedCurrentClub=p.currentClub||'';
+      if(Object.prototype.hasOwnProperty.call(ch,'history')) p.verifiedHistory=JSON.parse(JSON.stringify(p.history||[]));
+    }
+    save();
+    try { await syncCloudPlayerProfiles(); } catch(syncErr) { console.warn('No se pudo refrescar la ficha tras aprobar',syncErr); }
+    toast('Cambios aprobados y publicados');
+    show('verifications');
+  }catch(e){
+    console.error('Scout Fem · aprobar cambio de perfil',e);
+    toast(e.message||'No se pudieron aprobar los cambios');
+  }
+};
+window.rejectProfileChange=async function(id){
+  try{
+    if(!supaSession?.access_token || !supaSession?.user?.id) throw new Error('Sesión no válida. Vuelve a iniciar sesión.');
+    await supaFetch('/rest/v1/rpc/review_player_profile_change_request',{
+      method:'POST',
+      body:JSON.stringify({p_request_id:id,p_decision:'rejected'})
+    });
+    toast('Cambios rechazados');
+    show('verifications');
+  }catch(e){
+    console.error('Scout Fem · rechazar cambio de perfil',e);
+    toast(e.message||'No se pudieron rechazar los cambios');
+  }
+};
 const _show=show;show=function(v){if(v==='verification'){setActive(v);let c=document.getElementById('content');if(c){c.innerHTML='<div class="loading">Cargando…</div>';requestAnimationFrame(()=>{try{playerVerification(c)}catch(err){console.error(err);c.innerHTML='<div class="card empty">No se pudo cargar la verificación.</div>'}})}return}if(v==='verifications'){setActive(v);let c=document.getElementById('content');if(c){c.innerHTML='<div class="loading">Cargando…</div>';requestAnimationFrame(()=>{try{adminVerifications(c)}catch(err){console.error(err);c.innerHTML='<div class="card empty">No se pudo cargar las verificaciones.</div>'}})}return}_show(v)};
 
 function shell(){app.innerHTML='<div class="shell"><aside class="side"><div class="brand">Scout <span>Fem</span></div><div class="nav">'+menus[user.role].map(([id,t])=>`<button data-v="${id}">${t}</button>`).join('')+'</div><button class="nav logout" id="logout">Cerrar sesión</button></aside><main class="main"><header class="top"><b>Inicio</b></header><div class="content" id="content"></div></main></div>';document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>show(b.dataset.v));document.getElementById('logout').onclick=()=>{localStorage.removeItem('sf_user_demo');localStorage.removeItem('sf_supa_session');supaSession=null;user=null;login()}}
@@ -683,20 +724,11 @@ async function syncScoutFemVerificationFlags(){
       localStorage.setItem('sf_user_demo', JSON.stringify(currentUser));
       save();
       if(Object.keys(changes).length) {
-        // Reutilizar la solicitud pendiente más reciente y cerrar duplicados antiguos del mismo perfil.
-        // Así el administrador no puede ver/aceptar una solicitud vieja con el equipo anterior.
-        const existing = await supaFetch('/rest/v1/player_profile_change_requests?select=id,created_at&profile_id=eq.'+encodeURIComponent(p.id)+'&user_id=eq.'+encodeURIComponent(supaSession.user.id)+'&status=eq.pending&order=created_at.desc');
-        if(Array.isArray(existing) && existing.length) {
-          const latest = existing[0];
-          const updated = await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(latest.id), {method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({changes})});
-          if(!Array.isArray(updated) || !updated.length) throw new Error('Supabase no confirmó la actualización de la solicitud. No se ha enviado el cambio; vuelve a intentarlo.');
-          for(const duplicate of existing.slice(1)) {
-            await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(duplicate.id)+'&status=eq.pending', {method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:'rejected',reviewed_at:new Date().toISOString(),reviewed_by:supaSession.user.id})});
-          }
-        } else {
-          const created = await supaFetch('/rest/v1/player_profile_change_requests', {method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({profile_id:p.id,user_id:supaSession.user.id,changes,status:'pending'})});
-          if(!Array.isArray(created) || !created.length) throw new Error('Supabase no confirmó la creación de la solicitud. No se ha enviado el cambio; vuelve a intentarlo.');
-        }
+        // Enviar o actualizar la solicitud mediante RPC; el cliente no escribe el estado de revisión.
+        await supaFetch('/rest/v1/rpc/submit_player_profile_change_request', {
+          method:'POST',
+          body:JSON.stringify({p_profile_id:p.id,p_changes:changes})
+        });
         toast('Perfil guardado. Los cambios de equipo e historial quedan pendientes de validación.');
       } else toast('Perfil guardado correctamente');
       show('profile');

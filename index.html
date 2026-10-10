@@ -86,9 +86,9 @@ async function supaSignIn(email,password){
 async function supaSignUp(email,password,metadata){
   return await supaFetch('/auth/v1/signup',{method:'POST',body:JSON.stringify({email,password,data:metadata||{}})});
 }
-async function cloudPlayerProfiles(){return await supaFetch('/rest/v1/player_profiles?select=profile_id,user_id,profile,updated_at');}
+async function cloudPlayerProfiles(){return await supaFetch('/rest/v1/player_profiles?select=profile_id,user_id,profile,updated_at&order=updated_at.desc');}
 async function cloudPlayerProfile(profileId){
-  const rows=await supaFetch('/rest/v1/player_profiles?select=profile_id,user_id,profile,updated_at&profile_id=eq.'+encodeURIComponent(profileId)+'&limit=1');
+  const rows=await supaFetch('/rest/v1/player_profiles?select=profile_id,user_id,profile,updated_at&profile_id=eq.'+encodeURIComponent(profileId)+'&order=updated_at.desc&limit=1');
   return rows&&rows[0]||null;
 }
 async function cloudSavePlayerProfile(profileId, profile){
@@ -112,7 +112,10 @@ async function syncCloudPlayerProfiles(){
   if(!supaSession?.access_token) return;
   try{
     const rows=await cloudPlayerProfiles();
-    (rows||[]).forEach(r=>{
+    // Si hay filas antiguas duplicadas, la más reciente de Supabase es la referencia.
+    const latest=new Map();
+    (rows||[]).forEach(r=>{if(r.profile_id && !latest.has(r.profile_id)) latest.set(r.profile_id,r)});
+    latest.forEach(r=>{
       const p=(db.players||[]).find(x=>x.id===r.profile_id);
       if(p && r.profile && typeof r.profile==='object') Object.assign(p,r.profile);
     });
@@ -634,7 +637,7 @@ async function syncScoutFemVerificationFlags(){
   }catch(e){console.warn('No se pudo sincronizar verificación',e.message)}
 }
 </script>
-<script>setTimeout(async()=>{try{if(window.user&&window.supaSession){await syncScoutFemVerificationFlags();render();}}catch(e){}},250);</script>
+<script>setTimeout(async()=>{try{if(window.user&&window.supaSession){await syncCloudPlayerProfiles();if(window.user.role==='player')await loadMyCloudPlayerProfile();await syncScoutFemVerificationFlags();render();}}catch(e){console.warn('Scout Fem · sincronización al cargar',e)}} ,250);</script>
 
 
 \n<script id="sf-profile-save-single-handler">

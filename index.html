@@ -60,7 +60,7 @@ let db=JSON.parse(localStorage.getItem(KEY)||'null')||seed; db.follows=db.follow
       p={id:'pVillalonga_'+r[0].toLowerCase()+'_'+r[1].split(' ')[0].toLowerCase(),firstName:r[0],lastName:r[1],position:'No indicada',dominantFoot:'Desconocida',region:'Galicia',country:'España',currentClub:'Atlético Villalonga FF',agency:'',status:'Disponible',economicExpectations:'',photo:'',videos:[],bio:'',birthDate:'',history:[{club:'Atlético Villalonga FF',from:'2026/27',to:'2026/27',categories:['Tercera Federación']}]};
       db.players.push(p);
     }
-    p.currentClub='Atlético Villalonga FF';
+    // No restablecer currentClub aquí: si ya existe, puede tener un cambio aprobado en Supabase.
     p.clubId=clubId;
     p.registrationType=r[2];
     p.squadRole=r[2]==='B'?'Primer equipo · ficha B':'Primer equipo';

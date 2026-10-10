@@ -277,7 +277,17 @@ async function adminVerifications(c){
 window.approveCloudRequest=async function(id){try{await cloudUpdateRequest(id,'approved',true);const rs=await supaFetch('/rest/v1/player_access_requests?select=requested_profile_id&status=eq.approved&id=eq.'+encodeURIComponent(id)+'&limit=1');const r=rs&&rs[0];if(r){const p=db.players.find(x=>x.id===r.requested_profile_id);if(p){p.claimStatus='claimed';p.verification=Object.assign({},p.verification||{},{status:'Verificada',reviewedAt:new Date().toISOString(),clubConfirmed:false});p.verifiedCurrentClub=p.currentClub||'';p.verifiedHistory=JSON.parse(JSON.stringify(p.history||[]));}save()}toast('Solicitud aprobada · perfil verificado');show('verifications')}catch(e){toast(e.message||'No se pudo aprobar')}};
 window.setPlayerVerification=async function(profileId,verified){try{const rows=await supaFetch('/rest/v1/player_access_requests?select=id,requested_profile_id,status&requested_profile_id=eq.'+encodeURIComponent(profileId)+'&status=eq.approved&order=created_at.desc&limit=1');const r=rows&&rows[0];if(!r)throw new Error('No hay una reclamación aprobada para este perfil');await supaFetch('/rest/v1/player_access_requests?id=eq.'+encodeURIComponent(r.id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({identity_verified:!!verified})});const p=db.players.find(x=>x.id===profileId);if(p){p.claimStatus='claimed';p.verification=Object.assign({},p.verification||{},{status:verified?'Verificada':'Reclamada',reviewedAt:new Date().toISOString()});save()}toast(verified?'Perfil verificado de nuevo':'Perfil desverificado; la jugadora conserva el acceso');show('players')}catch(e){toast(e.message||'No se pudo cambiar la verificación')}};
 window.rejectCloudRequest=async function(id){try{await cloudUpdateRequest(id,'rejected');toast('Solicitud rechazada');show('verifications')}catch(e){toast(e.message||'No se pudo rechazar')}};
-async function cloudProfileChangesPending(){return await supaFetch('/rest/v1/player_profile_change_requests?select=*&status=eq.pending&order=created_at.desc')}
+async function cloudProfileChangesPending(){
+  const rows = await supaFetch('/rest/v1/player_profile_change_requests?select=*&status=eq.pending&order=created_at.desc');
+  // Protección adicional: mostrar solo la solicitud pendiente más reciente por perfil y usuario.
+  const seen = new Set();
+  return (Array.isArray(rows)?rows:[]).filter(r=>{
+    const key=String(r.profile_id||'')+'|'+String(r.user_id||'');
+    if(seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 async function cloudProfileChange(id,status){return await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(id),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({status,reviewed_at:new Date().toISOString(),reviewed_by:supaSession.user.id})})}
 window.approveProfileChange=async function(id){try{const rs=await supaFetch('/rest/v1/player_profile_change_requests?select=*&id=eq.'+encodeURIComponent(id)+'&limit=1');const r=rs&&rs[0];if(!r)throw new Error('No se encontró el cambio');if(r.status!=='pending')throw new Error('Esta solicitud ya no está pendiente; actualiza la pantalla.');let ch=r.changes;if(typeof ch==='string')ch=JSON.parse(ch);if(!ch||typeof ch!=='object'||Array.isArray(ch))throw new Error('Los datos del cambio no tienen un formato válido.');const row=await cloudPlayerProfile(r.profile_id);if(!row)throw new Error('El perfil online de la jugadora todavía no existe');const merged=Object.assign({},row.profile||{},ch);const updated=await supaFetch('/rest/v1/player_profiles?profile_id=eq.'+encodeURIComponent(r.profile_id),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({profile:merged,updated_at:new Date().toISOString()})});if(!Array.isArray(updated)||!updated.length)throw new Error('Supabase no confirmó la actualización del perfil. El cambio sigue pendiente; revisa las políticas UPDATE de player_profiles.');await cloudProfileChange(id,'approved');const p=db.players.find(x=>x.id===r.profile_id);if(p){Object.assign(p,ch);if(Object.prototype.hasOwnProperty.call(ch,'currentClub'))p.verifiedCurrentClub=p.currentClub||'';if(Object.prototype.hasOwnProperty.call(ch,'history'))p.verifiedHistory=JSON.parse(JSON.stringify(p.history||[]));}save();toast('Cambios aprobados y publicados');show('verifications')}catch(e){console.error('Scout Fem · aprobar cambio de perfil',e);toast(e.message||'No se pudieron aprobar los cambios')}};
 window.rejectProfileChange=async function(id){try{await cloudProfileChange(id,'rejected');toast('Cambios rechazados');show('verifications')}catch(e){toast(e.message||'No se pudieron rechazar los cambios')}};
@@ -670,11 +680,19 @@ async function syncScoutFemVerificationFlags(){
       localStorage.setItem('sf_user_demo', JSON.stringify(currentUser));
       save();
       if(Object.keys(changes).length) {
-        const existing = await supaFetch('/rest/v1/player_profile_change_requests?select=id&profile_id=eq.'+encodeURIComponent(p.id)+'&user_id=eq.'+encodeURIComponent(supaSession.user.id)+'&status=eq.pending&limit=1');
-        if(existing && existing[0]) {
-          await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(existing[0].id), {method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({changes})});
+        // Reutilizar la solicitud pendiente más reciente y cerrar duplicados antiguos del mismo perfil.
+        // Así el administrador no puede ver/aceptar una solicitud vieja con el equipo anterior.
+        const existing = await supaFetch('/rest/v1/player_profile_change_requests?select=id,created_at&profile_id=eq.'+encodeURIComponent(p.id)+'&user_id=eq.'+encodeURIComponent(supaSession.user.id)+'&status=eq.pending&order=created_at.desc');
+        if(Array.isArray(existing) && existing.length) {
+          const latest = existing[0];
+          const updated = await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(latest.id), {method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({changes})});
+          if(!Array.isArray(updated) || !updated.length) throw new Error('Supabase no confirmó la actualización de la solicitud. No se ha enviado el cambio; vuelve a intentarlo.');
+          for(const duplicate of existing.slice(1)) {
+            await supaFetch('/rest/v1/player_profile_change_requests?id=eq.'+encodeURIComponent(duplicate.id)+'&status=eq.pending', {method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:'rejected',reviewed_at:new Date().toISOString(),reviewed_by:supaSession.user.id})});
+          }
         } else {
-          await supaFetch('/rest/v1/player_profile_change_requests', {method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({profile_id:p.id,user_id:supaSession.user.id,changes,status:'pending'})});
+          const created = await supaFetch('/rest/v1/player_profile_change_requests', {method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({profile_id:p.id,user_id:supaSession.user.id,changes,status:'pending'})});
+          if(!Array.isArray(created) || !created.length) throw new Error('Supabase no confirmó la creación de la solicitud. No se ha enviado el cambio; vuelve a intentarlo.');
         }
         toast('Perfil guardado. Los cambios de equipo e historial quedan pendientes de validación.');
       } else toast('Perfil guardado correctamente');

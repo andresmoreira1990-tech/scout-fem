@@ -143,6 +143,37 @@ async function cloudUpdateRequest(id,status,identityVerified){const body={status
 function restoreSupa(){try{supaSession=JSON.parse(localStorage.getItem('sf_supa_session')||'null')}catch(e){supaSession=null}}
 restoreSupa();
 
+const agencyCloudLoaded={};
+async function cloudSaveAgencyProRecord(type, record){
+  if(!supaSession?.access_token||!supaSession?.user?.id||!user?.agencyId)return;
+  const recordId=type==='portfolio'?String(record.playerId):String(record.id);
+  const payload={owner_user_id:supaSession.user.id,agency_id:String(user.agencyId),record_type:type,record_id:recordId,payload:record,updated_at:new Date().toISOString()};
+  await supaFetch('/rest/v1/agency_pro_records?on_conflict=owner_user_id,agency_id,record_type,record_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(payload)});
+}
+async function cloudDeleteAgencyProRecord(type, recordId){
+  if(!supaSession?.access_token||!supaSession?.user?.id||!user?.agencyId)return;
+  await supaFetch('/rest/v1/agency_pro_records?agency_id=eq.'+encodeURIComponent(String(user.agencyId))+'&record_type=eq.'+encodeURIComponent(type)+'&record_id=eq.'+encodeURIComponent(String(recordId)),{method:'DELETE',headers:{Prefer:'return=minimal'}});
+}
+async function hydrateAgencyProRecords(type, container){
+  if(!supaSession?.access_token||!supaSession?.user?.id||!user?.agencyId)return;
+  const key=String(supaSession.user.id)+':'+String(user.agencyId)+':'+type;
+  if(agencyCloudLoaded[key])return;
+  agencyCloudLoaded[key]=true;
+  try{
+    const rows=await supaFetch('/rest/v1/agency_pro_records?select=record_id,payload&agency_id=eq.'+encodeURIComponent(String(user.agencyId))+'&record_type=eq.'+encodeURIComponent(type));
+    const arr=type==='portfolio'?(db.agencyPortfolio||(db.agencyPortfolio=[])):(db.agencyFollowups||(db.agencyFollowups=[]));
+    (rows||[]).forEach(row=>{
+      if(!row.payload||typeof row.payload!=='object')return;
+      const id=type==='portfolio'?String(row.payload.playerId):String(row.payload.id);
+      if(id!==String(row.record_id))return;
+      const index=arr.findIndex(x=>x.agencyId===user.agencyId&&String(type==='portfolio'?x.playerId:x.id)===id);
+      if(index>=0)arr[index]=row.payload;else arr.push(row.payload);
+    });
+    save();
+    if(container&&container.isConnected&&document.getElementById('content')===container){if(type==='portfolio')agencyPortfolio(container);else agencyFollowups(container);}
+  }catch(e){agencyCloudLoaded[key]=false;console.warn('No se pudieron cargar los datos Pro de agencia:',e.message)}
+}
+
 const app=document.getElementById('app');
 function save(){localStorage.setItem(KEY,JSON.stringify(db));} function esc(s=''){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))} function initials(p){return ((p.firstName[0]||'')+(p.lastName[0]||'')).toUpperCase()} function toast(x){let e=document.createElement('div');e.className='toast';e.textContent=x;document.body.appendChild(e);setTimeout(()=>e.remove(),1800)}
 const menus={admin:[['dashboard','Inicio'],['players','Jugadoras'],['clubs','Clubes'],['agencies','Agencias'],['representations','Representaciones'],['claims','Reclamaciones'],['users','Usuarios']],club:[['dashboard','Inicio'],['squad','Mi plantilla'],['market','Mercado'],['follow','Seguimiento']],player:[['profile','Mi perfil'],['requests','Solicitudes']],agency:[['agency','Mi agencia'],['portfolio','Cartera de jugadoras'],['followups','Seguimientos'],['market','Mercado']]};

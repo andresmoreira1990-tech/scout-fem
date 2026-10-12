@@ -456,11 +456,6 @@ function profile(c){
   }
   c.innerHTML=`<div class="title">Mi perfil ${verificationBadge(p)}</div>
   <p class="muted">Tus datos, foto y material deportivo.</p>
-  <div class="card" style="margin-bottom:14px">
-    <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;font-weight:800">Agencia de representación</div>
-    <div style="font-size:18px;font-weight:800;margin-top:5px">${p.agency?esc(p.agency):"Actualmente no tienes una agencia de representación registrada"}</div>
-    ${p.agency?'<div style="color:#166534;font-size:13px;font-weight:700;margin-top:5px">✓ Representación registrada</div>':'<div class="muted" style="font-size:13px;margin-top:5px">Si una representación se verifica, aparecerá aquí.</div>'}
-  </div>
   ${(p.verifiedCurrentClub!==undefined && p.currentClub!==p.verifiedCurrentClub)?'<div class="card" style="margin-bottom:12px"><span class="pill yellow">Cambio de equipo pendiente de validación</span></div>':''}
   <div class="card">
     <form id="pf" class="form" onsubmit="return false">
@@ -486,6 +481,10 @@ function profile(c){
       <div class="row">
         <label>País<input class="input" name="country" value="${esc(p.country)}"></label>
         <label>Equipo actual<input class="input" name="currentClub" value="${esc(p.currentClub||'')}"></label>
+      </div>
+      <div class="field" style="margin-top:-4px">
+        <div class="field-label">Agencia de representación</div>
+        ${p.agency&&db.agencies.find(x=>x.name===p.agency)?'<button type="button" class="btn secondary" style="display:inline-flex;align-items:center;gap:8px" onclick="openAgencyProfile(\''+db.agencies.find(x=>x.name===p.agency).id+'\')"><span>✓</span> '+esc(p.agency)+'</button>':'<span class="muted" style="font-size:13px">Sin agencia de representación registrada</span>'}
       </div>
       <div class="field">
         <div class="field-label">Historial deportivo</div>

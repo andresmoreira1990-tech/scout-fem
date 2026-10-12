@@ -456,7 +456,12 @@ function profile(c){
   }
   c.innerHTML=`<div class="title">Mi perfil ${verificationBadge(p)}</div>
   <p class="muted">Tus datos, foto y material deportivo.</p>
-  ${(p.verifiedCurrentClub!==undefined && p.currentClub!==p.verifiedCurrentClub)?'<div class="card" style="margin-bottom:12px"><span class="pill yellow">Cambio de equipo pendiente de validación</span></div>':''}
+  <div class="card" style="margin-bottom:14px">
+    <div class="muted" style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;font-weight:800">Agencia de representación</div>
+    <div style="font-size:18px;font-weight:800;margin-top:5px">\${p.agency?esc(p.agency):"Actualmente no tienes una agencia de representación registrada"}</div>
+    \${p.agency?'<div style="color:#166534;font-size:13px;font-weight:700;margin-top:5px">✓ Representación registrada</div>':'<div class="muted" style="font-size:13px;margin-top:5px">Si una representación se verifica, aparecerá aquí.</div>'}
+  </div>
+  \${(p.verifiedCurrentClub!==undefined && p.currentClub!==p.verifiedCurrentClub)?'<div class="card" style="margin-bottom:12px"><span class="pill yellow">Cambio de equipo pendiente de validación</span></div>':''}
   <div class="card">
     <form id="pf" class="form" onsubmit="return false">
       <div class="profile">

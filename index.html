@@ -83,7 +83,7 @@ async function supaSignIn(email,password){
   const data=await supaFetch('/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})});
   supaSession=data; localStorage.setItem('sf_supa_session',JSON.stringify(data)); return data;
 }
-async async function supaSignUp(email,password,metadata){
+async function supaSignUp(email,password,metadata){
   return await supaFetch('/auth/v1/signup',{method:'POST',body:JSON.stringify({email,password,data:metadata||{}})});
 }
 async function cloudPlayerProfiles(){return await supaFetch('/rest/v1/player_profiles?select=profile_id,user_id,profile,updated_at&order=updated_at.desc');}

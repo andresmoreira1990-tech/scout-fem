@@ -652,18 +652,22 @@ async function users(c){
     const authRows=await supaFetch('/rest/v1/scout_auth_users?select=id,email,display_name,created_at,last_sign_in_at,synced_at&order=created_at.asc');
     const accounts=Array.isArray(authRows)?authRows:[];
     // Datos auxiliares para identificar el rol y asociar el nombre del perfil, sin añadir cuentas.
-    let scoutRows=[],claims=[];
+    let scoutRows=[],claims=[],registrations=[];
     try{scoutRows=await supaFetch('/rest/v1/scout_users?select=id,role');}catch(e){console.warn('No se pudieron leer los roles de scout_users',e.message)}
     try{claims=await supaFetch('/rest/v1/player_access_requests?select=player_name,player_email,requested_profile_id,status,created_at&order=created_at.desc');}catch(e){console.warn('No se pudieron leer datos auxiliares de reclamaciones',e.message)}
+    try{registrations=await supaFetch('/rest/v1/account_registration_requests?select=user_id,email,account_type,organization_name,status,created_at&order=created_at.desc');}catch(e){console.warn('No se pudieron leer solicitudes de alta',e.message)}
     const rows=accounts.map(a=>{
       const email=String(a.email||'').trim();
       const key=email.toLowerCase();
       const authId=a.id;
       const scout=scoutRows.find(x=>x.id===authId);
+      const reg=registrations.find(x=>x.user_id===authId);
       const claim=claims.find(x=>String(x.player_email||'').trim().toLowerCase()===key);
       const local=db.users.find(x=>String(x.email||'').trim().toLowerCase()===key);
       const player=claim?db.players.find(p=>p.id===claim.requested_profile_id):null;
-      const role=(scout&&scout.role)||(claim?'player':(local&&local.role)||'Sin rol');
+      // Una solicitud profesional aprobada manda sobre roles antiguos de jugadora.
+      const regRole=reg&&reg.status==='approved'?(reg.account_type==='agency'?'agency':'club'):null;
+      const role=regRole||(scout&&scout.role)||(claim?'player':(local&&local.role)||'Sin rol');
       // No heredar el nombre de una reclamación de jugadora si la cuenta ya tiene rol de club/agencia.
       const isPlayer=role==='player';
       const name=(a.display_name||'').trim()||

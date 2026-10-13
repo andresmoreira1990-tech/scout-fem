@@ -265,7 +265,7 @@ async function registerAccountView(){
   const type=document.getElementById('regType'),orgLabel=document.getElementById('regOrgLabel');const updateLabel=()=>{orgLabel.firstChild.textContent=type.value==='agency'?'Nombre de la agencia':'Nombre del club'};type.onchange=updateLabel;updateLabel();
   document.getElementById('regBack').onclick=()=>login();
   document.getElementById('registerAccount').onsubmit=async e=>{e.preventDefault();const btn=document.getElementById('regSubmit');btn.disabled=true;btn.textContent='Enviando solicitud…';const email=document.getElementById('regEmail').value.trim().toLowerCase();const metadata={account_type:type.value,organization_name:document.getElementById('regOrg').value.trim(),contact_name:document.getElementById('regContact').value.trim(),phone:document.getElementById('regPhone').value.trim()};
-    try{if(metadata.organization_name.length<2)throw new Error('Introduce el nombre del club o agencia.');const data=await supaSignUp(email,document.getElementById('regPassword').value,metadata);
+    try{if(metadata.organization_name.length<2)throw new Error('Introduce el nombre del club o agencia.');const emailCheck=await supaFetch('/rest/v1/rpc/email_is_registered',{method:'POST',body:JSON.stringify({p_email:email})});if(emailCheck===true)throw new Error('DUPLICATE_EMAIL');const data=await supaSignUp(email,document.getElementById('regPassword').value,metadata);
       // Supabase puede responder 200 aunque el correo ya exista (protección anti-enumeración).
       // En ese caso devuelve identities vacío; las cuentas ya confirmadas también se detectan por fecha.
       const identities=data?.user?.identities;

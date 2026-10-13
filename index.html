@@ -229,7 +229,11 @@ function login(){
             db.clubs.push({id:localId,name:reg.organization_name,officialName:reg.organization_name,shortName:reg.organization_name,abbreviation:reg.organization_name.slice(0,12),category:'',competition:'',group:'',season:'2026/27',region:'',parentClub:reg.organization_name,type:'principal'});
           }
           user={id:'supabase:'+authId,email:authEmail,name:reg.organization_name,role,active:true,supabaseId:authId,...(role==='agency'?{agencyId:localId}:{clubId:localId})};
-          await supaFetch('/rest/v1/scout_users',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id:authId,role,email:authEmail,name:reg.organization_name,active:true,player_id:null})});
+          // El acceso se autoriza por la solicitud aprobada. No bloquear el inicio de sesión
+          // si RLS impide sincronizar scout_users; esa sincronización no es requisito de acceso.
+          try{
+            await supaFetch('/rest/v1/scout_users',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id:authId,role,email:authEmail,name:reg.organization_name,active:true,player_id:null})});
+          }catch(syncError){console.warn('Acceso profesional aprobado; no se pudo sincronizar scout_users:',syncError.message);}
           save();
         }else if(sr){
           user={id:'supabase:'+authId,email:authEmail,name:sess.user.user_metadata?.name||authEmail,role:sr.role,active:true,supabaseId:authId};

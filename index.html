@@ -206,8 +206,9 @@ function login(){
       }else{
         // Una solicitud de alta aprobada de club/agencia tiene prioridad sobre roles antiguos
         // o datos locales de jugadora asociados al mismo correo.
-        const regRows=await supaFetch('/rest/v1/account_registration_requests?select=id,user_id,email,account_type,organization_name,contact_name,phone,status&user_id=eq.'+encodeURIComponent(authId)+'&limit=1');
-        const reg=regRows&&regRows[0];
+        const regRows=await supaFetch('/rest/v1/account_registration_requests?select=id,user_id,email,account_type,organization_name,contact_name,phone,status,created_at&email=ilike.'+encodeURIComponent(authEmail)+'&order=created_at.desc&limit=20');
+        // Si quedaron altas duplicadas durante las pruebas, una aprobación gana a cualquier pendiente.
+        const reg=(regRows||[]).find(x=>x.status==='approved')||(regRows||[])[0];
         if(reg){
           if(reg.status!=='approved'){
             localStorage.removeItem('sf_supa_session');supaSession=null;
@@ -656,12 +657,21 @@ async function users(c){
     try{scoutRows=await supaFetch('/rest/v1/scout_users?select=id,role');}catch(e){console.warn('No se pudieron leer los roles de scout_users',e.message)}
     try{claims=await supaFetch('/rest/v1/player_access_requests?select=player_name,player_email,requested_profile_id,status,created_at&order=created_at.desc');}catch(e){console.warn('No se pudieron leer datos auxiliares de reclamaciones',e.message)}
     try{registrations=await supaFetch('/rest/v1/account_registration_requests?select=user_id,email,account_type,organization_name,status,created_at&order=created_at.desc');}catch(e){console.warn('No se pudieron leer solicitudes de alta',e.message)}
-    const rows=accounts.map(a=>{
+    const uniqueAccounts=new Map();
+    accounts.forEach(a=>{
+      const key=String(a.email||'').trim().toLowerCase();
+      if(!key){uniqueAccounts.set('id:'+a.id,a);return;}
+      const prev=uniqueAccounts.get(key);
+      const approvedFor=(item)=>registrations.some(x=>x.status==='approved'&&(x.user_id===item.id||String(x.email||'').trim().toLowerCase()===key));
+      if(!prev || (!approvedFor(prev)&&approvedFor(a)) || (!prev.last_sign_in_at&&a.last_sign_in_at)) uniqueAccounts.set(key,a);
+    });
+    const rows=Array.from(uniqueAccounts.values()).map(a=>{
       const email=String(a.email||'').trim();
       const key=email.toLowerCase();
       const authId=a.id;
       const scout=scoutRows.find(x=>x.id===authId);
-      const reg=registrations.find(x=>x.user_id===authId);
+      const matchingRegs=registrations.filter(x=>x.user_id===authId||String(x.email||'').trim().toLowerCase()===key);
+      const reg=matchingRegs.find(x=>x.status==='approved')||matchingRegs[0];
       const claim=claims.find(x=>String(x.player_email||'').trim().toLowerCase()===key);
       const local=db.users.find(x=>String(x.email||'').trim().toLowerCase()===key);
       const player=claim?db.players.find(p=>p.id===claim.requested_profile_id):null;

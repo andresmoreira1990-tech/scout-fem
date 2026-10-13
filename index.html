@@ -618,6 +618,26 @@ function agencyFollowups(c){
  const a=db.agencies.find(x=>x.id===user.agencyId);if(!a){c.innerHTML='<div class="card empty">No se encuentra la agencia asociada a esta cuenta.</div>';return}
  if(!Array.isArray(db.agencyFollowups))db.agencyFollowups=[];
  const rows=db.agencyFollowups.filter(x=>x.agencyId===a.id);
+ const today=new Date();today.setHours(0,0,0,0);
+ function nextFollowupAction(r){
+   const actions=[];
+   // Las acciones programadas anteriormente se conservan en el historial aunque se cambie la fecha actual.
+   (Array.isArray(r.contacts)?r.contacts:[]).forEach((entry,index)=>{
+     const text=String(entry||'');
+     let m=text.match(/Próxima acción programada · (.*?) · Fecha: (\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|sin fecha)/i);
+     if(!m)m=text.match(/Próxima acción: (.*?) · Fecha: (\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|sin fecha)/i);
+     if(!m)return;
+     let date=null;const raw=m[2];
+     if(/^\d{4}-\d{2}-\d{2}$/.test(raw))date=new Date(raw+'T00:00:00');
+     else if(/^\d{2}\/\d{2}\/\d{4}$/.test(raw)){const [d,mo,y]=raw.split('/');date=new Date(Number(y),Number(mo)-1,Number(d));}
+     if(date&&!Number.isNaN(date.getTime()))actions.push({action:m[1].trim(),date:date.toISOString().slice(0,10),time:date.getTime(),index});
+   });
+   // También incluye la próxima acción vigente, por si todavía no hay historial de cambios.
+   if(r.nextAction&&r.nextDate){const d=new Date(r.nextDate+'T00:00:00');if(!Number.isNaN(d.getTime())&&!actions.some(x=>x.action===r.nextAction&&x.date===r.nextDate))actions.push({action:r.nextAction,date:r.nextDate,time:d.getTime(),index:actions.length});}
+   const future=actions.filter(x=>x.time>=today.getTime()).sort((x,y)=>x.time-y.time||x.index-y.index);
+   const overdue=actions.filter(x=>x.time<today.getTime()).sort((x,y)=>y.time-x.time||y.index-x.index);
+   return future[0]||overdue[0]||{action:r.nextAction||'Sin definir',date:r.nextDate||'—'};
+ }
  const statuses=['Por contactar','Pendiente de respuesta','Reunión prevista','Negociación','Captada','Descartada','Sin respuesta'];
  const open=rows.filter(x=>!['Captada','Descartada','Sin respuesta'].includes(x.status));
  c.innerHTML=`<div class="title">Seguimientos</div><p class="muted">Organiza la captación de nuevas jugadoras, contactos, negociaciones y próximas acciones de tu agencia.</p><div class="actions"><button class="btn secondary" onclick="exportAgencyReport('followups')">Exportar seguimientos CSV</button></div><div class="actions"><button class="btn secondary" onclick="exportAgencyReport('followups')">Exportar seguimientos CSV</button></div>
@@ -626,7 +646,7 @@ function agencyFollowups(c){
  <div class="section card"><b>¿Cómo añadir una jugadora?</b><p class="muted">Ve a Mercado, abre su ficha y pulsa «Añadir a seguimientos». Las notas de seguimiento son privadas de tu agencia.</p><button class="btn" id="goAgencyMarket">Ir al mercado</button></div>`;
  document.getElementById('goAgencyMarket').onclick=()=>show('market');
  const list=document.getElementById('agencyFollowList');
- function draw(){const q=document.getElementById('agencyFollowSearch').value.trim().toLowerCase(),st=document.getElementById('agencyFollowStatus').value,pr=document.getElementById('agencyFollowPriority').value;const filtered=rows.filter(r=>{const p=db.players.find(x=>x.id===r.playerId);return p&&(!q||(p.firstName+' '+p.lastName+' '+(p.currentClub||'')).toLowerCase().includes(q))&&(!st||r.status===st)&&(!pr||(r.priority||'Media')===pr)});list.innerHTML=filtered.length?'<div class="table-wrap"><table class="table"><thead><tr><th>Jugadora</th><th>Estado</th><th>Prioridad</th><th>Próxima acción</th><th>Fecha</th><th></th></tr></thead><tbody>'+filtered.map(r=>{const p=db.players.find(x=>x.id===r.playerId);return `<tr><td><b>${esc(p.firstName+' '+p.lastName)}</b><div class="muted">${esc(p.position||'')} · ${esc(p.currentClub||'Sin equipo')}</div></td><td>${esc(r.status)}</td><td>${esc(r.priority||'Media')}</td><td>${esc(r.nextAction||'Sin definir')}</td><td>${esc(r.nextDate||'—')}</td><td><button class="btn secondary" onclick="editAgencyFollowup('${r.id}')">Gestionar</button></td></tr>`}).join('')+'</tbody></table></div>':'<div class="empty">Todavía no tienes seguimientos. Añade una jugadora desde el mercado.</div>'}
+ function draw(){const q=document.getElementById('agencyFollowSearch').value.trim().toLowerCase(),st=document.getElementById('agencyFollowStatus').value,pr=document.getElementById('agencyFollowPriority').value;const filtered=rows.filter(r=>{const p=db.players.find(x=>x.id===r.playerId);return p&&(!q||(p.firstName+' '+p.lastName+' '+(p.currentClub||'')).toLowerCase().includes(q))&&(!st||r.status===st)&&(!pr||(r.priority||'Media')===pr)}).map(r=>({r,upcoming:nextFollowupAction(r)})).sort((x,y)=>{const dx=x.upcoming.date&&x.upcoming.date!=='—'?new Date(x.upcoming.date+'T00:00:00').getTime():Number.MAX_SAFE_INTEGER;const dy=y.upcoming.date&&y.upcoming.date!=='—'?new Date(y.upcoming.date+'T00:00:00').getTime():Number.MAX_SAFE_INTEGER;return dx-dy});list.innerHTML=filtered.length?'<div class="table-wrap"><table class="table"><thead><tr><th>Jugadora</th><th>Estado</th><th>Prioridad</th><th>Próxima acción</th><th>Fecha</th><th></th></tr></thead><tbody>'+filtered.map(({r,upcoming})=>{const p=db.players.find(x=>x.id===r.playerId);return `<tr><td><b>${esc(p.firstName+' '+p.lastName)}</b><div class="muted">${esc(p.position||'')} · ${esc(p.currentClub||'Sin equipo')}</div></td><td>${esc(r.status)}</td><td>${esc(r.priority||'Media')}</td><td>${esc(upcoming.action||'Sin definir')}</td><td>${esc(upcoming.date||'—')}</td><td><button class="btn secondary" onclick="editAgencyFollowup('${r.id}')">Gestionar</button></td></tr>`}).join('')+'</tbody></table></div>':'<div class="empty">Todavía no tienes seguimientos. Añade una jugadora desde el mercado.</div>'}
  ['agencyFollowSearch','agencyFollowStatus','agencyFollowPriority'].forEach(id=>document.getElementById(id).addEventListener(id==='agencyFollowSearch'?'input':'change',draw));draw();void hydrateAgencyProRecords('followup',c);
 }
 window.addAgencyFollowup=function(playerId){const a=db.agencies.find(x=>x.id===user.agencyId),p=db.players.find(x=>x.id===playerId);if(!a||!p)return toast('No se encuentra la jugadora o la agencia');if(!Array.isArray(db.agencyFollowups))db.agencyFollowups=[];let r=db.agencyFollowups.find(x=>x.agencyId===a.id&&x.playerId===p.id);if(r){toast('Esta jugadora ya está en tus seguimientos');return false}r={id:'af'+Date.now(),agencyId:a.id,playerId:p.id,status:'Por contactar',priority:'Media',reason:'',notes:'',contacts:[],nextAction:'Contactar con la jugadora',nextDate:'',createdAt:new Date().toISOString()};db.agencyFollowups.push(r);save();cloudSaveAgencyProRecord('followup',r).catch(e=>toast('Guardado local; error al sincronizar con la nube'));toast('Jugadora añadida a Seguimientos');return true};

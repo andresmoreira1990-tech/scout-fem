@@ -626,11 +626,18 @@ function agencyFollowups(c){
      const text=String(entry||'');
      let m=text.match(/Próxima acción programada · (.*?) · Fecha: (\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|sin fecha)/i);
      if(!m)m=text.match(/Próxima acción: (.*?) · Fecha: (\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4}|sin fecha)/i);
-     if(!m)return;
-     let date=null;const raw=m[2];
+     let raw=null,action='';
+     if(m){action=m[1].trim();raw=m[2];}
+     else {
+       // En jugadoras representadas, cada gestión guarda su fecha programada al inicio.
+       const own=text.match(/^(\d{4}-\d{2}-\d{2})\s*·\s*([^·]+)(?:\s*·\s*(.*))?$/);
+       if(own){raw=own[1];action=own[2].trim();}
+     }
+     if(!raw||/^sin fecha$/i.test(raw))return;
+     let date=null;
      if(/^\d{4}-\d{2}-\d{2}$/.test(raw))date=new Date(raw+'T00:00:00');
      else if(/^\d{2}\/\d{2}\/\d{4}$/.test(raw)){const [d,mo,y]=raw.split('/');date=new Date(Number(y),Number(mo)-1,Number(d));}
-     if(date&&!Number.isNaN(date.getTime()))actions.push({action:m[1].trim(),date:date.toISOString().slice(0,10),time:date.getTime(),index});
+     if(date&&!Number.isNaN(date.getTime()))actions.push({action,date:date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0'),time:date.getTime(),index});
    });
    // También incluye la próxima acción vigente, por si todavía no hay historial de cambios.
    if(r.nextAction&&r.nextDate){const d=new Date(r.nextDate+'T00:00:00');if(!Number.isNaN(d.getTime())&&!actions.some(x=>x.action===r.nextAction&&x.date===r.nextDate))actions.push({action:r.nextAction,date:r.nextDate,time:d.getTime(),index:actions.length});}

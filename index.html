@@ -663,10 +663,13 @@ async function users(c){
       const claim=claims.find(x=>String(x.player_email||'').trim().toLowerCase()===key);
       const local=db.users.find(x=>String(x.email||'').trim().toLowerCase()===key);
       const player=claim?db.players.find(p=>p.id===claim.requested_profile_id):null;
+      const role=(scout&&scout.role)||(claim?'player':(local&&local.role)||'Sin rol');
+      // No heredar el nombre de una reclamación de jugadora si la cuenta ya tiene rol de club/agencia.
+      const isPlayer=role==='player';
       const name=(a.display_name||'').trim()||
-        (player?(player.firstName+' '+player.lastName):'')||
-        (claim&&claim.player_name)|| (local&&local.name)||email||'Cuenta sin nombre';
-      return {id:authId,name,email,role:(scout&&scout.role)||(claim?'player':(local&&local.role)||'Sin rol'),createdAt:a.created_at,lastSignIn:a.last_sign_in_at,claimStatus:claim?claim.status:'',source:'auth'};
+        (isPlayer&&player?(player.firstName+' '+player.lastName):'')||
+        (isPlayer&&claim&&claim.player_name)|| (isPlayer&&local&&local.role==='player'&&local.name)||email||'Cuenta sin nombre';
+      return {id:authId,name,email,role,createdAt:a.created_at,lastSignIn:a.last_sign_in_at,claimStatus:isPlayer&&claim?claim.status:'',source:'auth'};
     }).sort((a,b)=>String(a.name).localeCompare(String(b.name),'es'));
     c.innerHTML='<div class="title">Usuarios</div><p class="muted">Se muestran exclusivamente las cuentas que existen en Supabase Authentication. Los perfiles deportivos y las solicitudes sin cuenta no aparecen aquí.</p><div class="card table-wrap"><table class="table"><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Cuenta</th><th>Último acceso</th></tr></thead><tbody>'+
       (rows.length?rows.map(x=>'<tr><td>'+esc(x.name)+'</td><td>'+esc(x.email)+'</td><td><span class="pill purple">'+esc(x.role)+'</span></td><td><span class="pill green">Cuenta real</span></td><td>'+esc(x.lastSignIn?new Date(x.lastSignIn).toLocaleString('es-ES'):'Todavía no ha iniciado sesión')+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">No hay cuentas sincronizadas desde Supabase Authentication.</td></tr>')+'</tbody></table></div>';

@@ -688,6 +688,7 @@ async function users(c){
       // No heredar el nombre de una reclamación de jugadora si la cuenta ya tiene rol de club/agencia.
       const isPlayer=role==='player';
       const name=(a.display_name||'').trim()||
+        (regRole&&reg&&reg.organization_name?reg.organization_name:'')||
         (isPlayer&&player?(player.firstName+' '+player.lastName):'')||
         (isPlayer&&claim&&claim.player_name)|| (isPlayer&&local&&local.role==='player'&&local.name)||email||'Cuenta sin nombre';
       return {id:authId,name,email,role,createdAt:a.created_at,lastSignIn:a.last_sign_in_at,claimStatus:isPlayer&&claim?claim.status:'',source:'auth'};

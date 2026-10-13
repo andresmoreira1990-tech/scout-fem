@@ -631,7 +631,66 @@ function agencyFollowups(c){
 }
 window.addAgencyFollowup=function(playerId){const a=db.agencies.find(x=>x.id===user.agencyId),p=db.players.find(x=>x.id===playerId);if(!a||!p)return toast('No se encuentra la jugadora o la agencia');if(!Array.isArray(db.agencyFollowups))db.agencyFollowups=[];let r=db.agencyFollowups.find(x=>x.agencyId===a.id&&x.playerId===p.id);if(r){toast('Esta jugadora ya está en tus seguimientos');return false}r={id:'af'+Date.now(),agencyId:a.id,playerId:p.id,status:'Por contactar',priority:'Media',reason:'',notes:'',contacts:[],nextAction:'Contactar con la jugadora',nextDate:'',createdAt:new Date().toISOString()};db.agencyFollowups.push(r);save();cloudSaveAgencyProRecord('followup',r).catch(e=>toast('Guardado local; error al sincronizar con la nube'));toast('Jugadora añadida a Seguimientos');return true};
 window.exportAgencyReport=function(type){const a=db.agencies.find(x=>x.id===user.agencyId);if(!a)return toast('No se encuentra la agencia');const quote=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';let rows=[],filename;if(type==='portfolio'){const ps=db.players.filter(p=>p.agency===a.name);rows=[['Jugadora','Equipo','Posición','Prioridad','Estado de gestión','Objetivo','Próximo seguimiento','Notas privadas','Historial']];ps.forEach(p=>{const r=(db.agencyPortfolio||[]).find(x=>x.agencyId===a.id&&x.playerId===p.id)||{};rows.push([p.firstName+' '+p.lastName,p.currentClub||'',p.position||'',r.priority||'Media',r.stage||'Activa',r.goal||'',r.nextFollowUp||'',r.notes||'',(r.history||[]).map(h=>h.at+' '+h.text).join(' | ')])});filename='scoutfem-cartera.csv'}else{const rs=(db.agencyFollowups||[]).filter(r=>r.agencyId===a.id);rows=[['Jugadora','Equipo','Estado','Prioridad','Motivo','Próxima acción','Fecha próxima acción','Notas privadas','Historial de contactos']];rs.forEach(r=>{const p=db.players.find(x=>x.id===r.playerId);if(p)rows.push([p.firstName+' '+p.lastName,p.currentClub||'',r.status||'',r.priority||'Media',r.reason||'',r.nextAction||'',r.nextDate||'',r.notes||'',(r.contacts||[]).join(' | ')])});filename='scoutfem-seguimientos.csv'}const csv=String.fromCharCode(65279)+rows.map(row=>row.map(quote).join(';')).join(String.fromCharCode(13,10));const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=filename;document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);toast('Informe exportado')};
-window.editAgencyFollowup=function(id){const a=db.agencies.find(x=>x.id===user.agencyId),r=(db.agencyFollowups||[]).find(x=>x.id===id&&x.agencyId===a?.id);if(!r)return toast('No se encuentra el seguimiento');const p=db.players.find(x=>x.id===r.playerId);if(!p)return toast('No se encuentra la jugadora');const m=document.createElement('div');m.className='modal';m.innerHTML=`<div class="modal-card"><div class="title">Seguimiento · ${esc(p.firstName+' '+p.lastName)}</div><p class="muted">Información privada de trabajo de tu agencia.</p><form id="agencyFollowForm" class="form"><label>Estado<select name="status">${['Por contactar','Pendiente de respuesta','Reunión prevista','Negociación','Captada','Descartada','Sin respuesta'].map(x=>`<option ${r.status===x?'selected':''}>${x}</option>`).join('')}</select></label><label>Prioridad<select name="priority">${['Alta','Media','Baja'].map(x=>`<option ${(r.priority||'Media')===x?'selected':''}>${x}</option>`).join('')}</select></label><label>Motivo del seguimiento<input class="input" name="reason" value="${esc(r.reason||'')}" placeholder="Qué interesa de esta jugadora"></label><label>Próxima acción<input class="input" name="nextAction" value="${esc(r.nextAction||'')}" placeholder="Ej. contactar con la jugadora"></label><label>Fecha de próxima acción<input class="input" type="date" name="nextDate" value="${esc(r.nextDate||'')}"></label><label>Notas internas<textarea name="notes" rows="4" placeholder="Contactos, reuniones, situación contractual, negociación…">${esc(r.notes||'')}</textarea></label><label>Tipo de gestión<select class="input" name="contactType"><option>Llamada</option><option>WhatsApp</option><option>Email</option><option>Reunión</option><option>Negociación</option><option>Contacto con club</option><option>Otro</option></select></label><label>Fecha de la gestión<input class="input" type="date" name="contactDate" value="${new Date().toISOString().slice(0,10)}"></label><label>Registrar gestión<input class="input" name="newContact" placeholder="Qué se habló, resultado y próximo paso"></label><div class="muted" style="font-size:12px">Historial de gestiones (incluye las acciones que registres abajo y los cambios de próxima acción)</div><div class="card">${(r.contacts||[]).length?(r.contacts||[]).slice().reverse().map(x=>'<p style="margin:5px 0">'+esc(x)+'</p>').join(''):'Todavía no hay contactos registrados.'}</div><div class="actions"><button type="button" class="btn ghost" id="cancelAgencyFollow">Cancelar</button><button type="button" class="btn danger" id="removeAgencyFollow">Eliminar seguimiento</button><button class="btn" type="submit">Guardar cambios</button></div></form></div>`;document.body.appendChild(m);m.querySelector('#cancelAgencyFollow').onclick=()=>m.remove();m.querySelector('#removeAgencyFollow').onclick=()=>{if(confirm('¿Eliminar este seguimiento?')){db.agencyFollowups=db.agencyFollowups.filter(x=>x.id!==id);save();cloudDeleteAgencyProRecord('followup',id).catch(e=>toast('Eliminado local; error al sincronizar con la nube'));m.remove();show('followups');toast('Seguimiento eliminado')}};m.querySelector('form').onsubmit=e=>{e.preventDefault();const f=new FormData(e.currentTarget);const oldAction=r.nextAction||'',oldDate=r.nextDate||'';for(const k of ['status','priority','reason','nextAction','nextDate','notes'])r[k]=String(f.get(k)||'').trim();r.contacts=Array.isArray(r.contacts)?r.contacts:[];const contact=String(f.get('newContact')||'').trim();const contactDate=String(f.get('contactDate')||new Date().toISOString().slice(0,10));const contactType=String(f.get('contactType')||'Otro');if(contact){r.contacts.push(contactDate+' · '+contactType+' · '+contact)}if((r.nextAction||'')!==oldAction||(r.nextDate||'')!==oldDate){const action=String(r.nextAction||'Acción pendiente').trim();const date=r.nextDate?new Date(r.nextDate+'T00:00:00').toLocaleDateString('es-ES'):'sin fecha';r.contacts.push(new Date().toLocaleString('es-ES')+' · Próxima acción programada · '+action+' · Fecha: '+date)}r.updatedAt=new Date().toISOString();save();cloudSaveAgencyProRecord('followup',r).catch(e=>toast('Guardado local; error al sincronizar con la nube'));m.remove();show('followups');toast('Seguimiento guardado correctamente')}};
+window.editAgencyFollowup=function(id){
+ const a=db.agencies.find(x=>x.id===user.agencyId),r=(db.agencyFollowups||[]).find(x=>x.id===id&&x.agencyId===a?.id);
+ if(!r)return toast('No se encuentra el seguimiento');
+ const p=db.players.find(x=>x.id===r.playerId);
+ if(!p)return toast('No se encuentra la jugadora');
+ const isOwn=String(p.agency||'').trim().toLowerCase()===String(a?.name||'').trim().toLowerCase();
+ const history=Array.isArray(r.contacts)?r.contacts:[];
+ const m=document.createElement('div');m.className='modal';
+ const historyHtml=history.length?history.slice().reverse().map(x=>'<div style="padding:9px 0;border-bottom:1px solid var(--border,#e5e7eb)">'+esc(x)+'</div>').join(''):'<p class="muted">Todavía no hay acciones registradas.</p>';
+ const typeOptions=['Negociación','Contacto con otro club','Email','WhatsApp','Llamada','Videollamada','Reunión','Otro'];
+ m.innerHTML=`<div class="modal-card"><div class="title">${isOwn?'Gestión de jugadora representada':'Seguimiento de jugadora externa'} · ${esc(p.firstName+' '+p.lastName)}</div>
+ <p class="muted">${isOwn?'Registra las acciones realizadas con una jugadora de tu agencia. Cada gestión se añadirá al historial.':'Organiza la oportunidad de contactar con una jugadora que no pertenece a tu agencia. Las notas son privadas.'}</p>
+ <form id="agencyFollowForm" class="form">
+ ${isOwn?`
+ <label>Prioridad de la gestión<select class="input" name="priority">${['Alta','Media','Baja'].map(x=>`<option ${(r.priority||'Media')===x?'selected':''}>${x}</option>`).join('')}</select></label>
+ <label>Tipo de gestión<select class="input" name="contactType">${typeOptions.map(x=>`<option>${x}</option>`).join('')}</select></label>
+ <label>Fecha de la gestión<input class="input" type="date" name="contactDate" value="${new Date().toISOString().slice(0,10)}" required></label>
+ <label>Registrar gestión · ¿Qué pasó?<textarea class="input" name="newContact" rows="3" required placeholder="Ej. Hablé con la jugadora, acordamos una reunión para el viernes…"></textarea></label>
+ `:`
+ <label>Estado<select class="input" name="status">${['Por contactar','Pendiente de respuesta','Reunión prevista','Negociación','Captada','Descartada','Sin respuesta'].map(x=>`<option ${r.status===x?'selected':''}>${x}</option>`).join('')}</select></label>
+ <label>Prioridad<select class="input" name="priority">${['Alta','Media','Baja'].map(x=>`<option ${(r.priority||'Media')===x?'selected':''}>${x}</option>`).join('')}</select></label>
+ <label>Motivo del seguimiento<input class="input" name="reason" value="${esc(r.reason||'')}" placeholder="Por qué te interesa esta jugadora"></label>
+ <label>Próxima acción<input class="input" name="nextAction" value="${esc(r.nextAction||'')}" placeholder="Ej. contactar con la jugadora o su agencia"></label>
+ <label>Fecha de la próxima acción<input class="input" type="date" name="nextDate" value="${esc(r.nextDate||'')}"></label>
+ <label>Notas internas<textarea class="input" name="notes" rows="3" placeholder="Información privada de tu agencia…">${esc(r.notes||'')}</textarea></label>
+ `}
+ <div class="section"><b>Historial de acciones</b><div class="card" style="margin-top:8px">${historyHtml}</div></div>
+ <div class="actions"><button type="button" class="btn ghost" id="cancelAgencyFollow">Cancelar</button><button type="button" class="btn danger" id="removeAgencyFollow">Eliminar seguimiento</button><button class="btn" type="submit">${isOwn?'Registrar gestión':'Guardar seguimiento'}</button></div>
+ </form></div>`;
+ document.body.appendChild(m);
+ m.querySelector('#cancelAgencyFollow').onclick=()=>m.remove();
+ m.querySelector('#removeAgencyFollow').onclick=()=>{if(confirm('¿Eliminar este seguimiento?')){db.agencyFollowups=db.agencyFollowups.filter(x=>x.id!==id);save();cloudDeleteAgencyProRecord('followup',id).catch(e=>toast('Eliminado local; error al sincronizar con la nube'));m.remove();show('followups');toast('Seguimiento eliminado')}};
+ m.querySelector('form').onsubmit=e=>{
+  e.preventDefault();const f=new FormData(e.currentTarget);
+  r.contacts=Array.isArray(r.contacts)?r.contacts:[];
+  if(isOwn){
+   r.priority=String(f.get('priority')||'Media');
+   const contact=String(f.get('newContact')||'').trim();
+   if(!contact){toast('Describe qué ocurrió en la gestión');return}
+   const contactDate=String(f.get('contactDate')||new Date().toISOString().slice(0,10));
+   const contactType=String(f.get('contactType')||'Otro');
+   r.contacts.push(contactDate+' · '+contactType+' · '+contact);
+  }else{
+   const oldAction=r.nextAction||'',oldDate=r.nextDate||'',oldStatus=r.status||'',oldPriority=r.priority||'Media',oldReason=r.reason||'',oldNotes=r.notes||'';
+   for(const k of ['status','priority','reason','nextAction','nextDate','notes'])r[k]=String(f.get(k)||'').trim();
+   if((r.nextAction||'')!==oldAction||(r.nextDate||'')!==oldDate||(r.status||'')!==oldStatus||(r.priority||'')!==oldPriority||(r.reason||'')!==oldReason||(r.notes||'')!==oldNotes){
+    const changes=[];
+    if(r.status!==oldStatus)changes.push('Estado: '+(r.status||'Sin definir'));
+    if(r.priority!==oldPriority)changes.push('Prioridad: '+r.priority);
+    if(r.reason!==oldReason)changes.push('Motivo actualizado');
+    if(r.nextAction!==oldAction||r.nextDate!==oldDate)changes.push('Próxima acción: '+(r.nextAction||'Sin definir')+' · Fecha: '+(r.nextDate||'sin fecha'));
+    if(r.notes!==oldNotes)changes.push('Notas internas actualizadas');
+    r.contacts.push(new Date().toLocaleString('es-ES')+' · '+changes.join(' · '));
+   }
+  }
+  r.updatedAt=new Date().toISOString();save();
+  cloudSaveAgencyProRecord('followup',r).catch(e=>toast('Guardado local; error al sincronizar con la nube'));
+  m.remove();show('followups');toast(isOwn?'Gestión registrada en el historial':'Seguimiento guardado correctamente');
+ };
+};
 
 function agencyPortfolio(c){
  const a=db.agencies.find(x=>x.id===user.agencyId);

@@ -188,76 +188,71 @@ function verificationState(p){return p.verification||{status:'Sin verificar',doc
 function verificationBadge(p){const claim=p.claimStatus||'none';const v=verificationState(p);if(claim==='pending')return '<span class="pill yellow">Reclamación pendiente</span>';if(claim==='claimed'&&v.status==='Verificada')return '<span class="pill green">✓ Perfil verificado</span>';if(claim==='claimed')return '<span class="pill blue">Perfil reclamado</span>';return '<span class="pill gray">Perfil no reclamado</span>'}
 
 function login(){
-  app.innerHTML='<div class="login"><div class="login-card"><div class="brand">Scout <span>Fem</span></div><p class="muted">Scouting de fútbol femenino · Acceso</p><form id="login" class="form"><label>Email<input class="input" id="email" value=""></label><label>Contraseña<div style="position:relative"><input class="input" id="password" type="password" value="" style="padding-right:90px"><button type="button" id="togglePass" class="btn ghost" style="position:absolute;right:5px;top:5px;padding:6px 9px">Ver</button></div></label><button class="btn">Entrar</button></form><div class="actions" style="margin-top:14px;display:grid;gap:9px"><button type="button" class="btn secondary" id="claimBtn">Soy jugadora / reclamar mi perfil</button><button type="button" class="btn ghost" id="registerBtn">Crear una cuenta nueva · Club o agencia</button></div><div class="demo"><b>Acceso online</b><br>Clubes y agencias pueden solicitar una cuenta. El administrador validará el alta antes de habilitar el acceso profesional.</div></div></div>';
-  const email=document.getElementById('email'),password=document.getElementById('password');
-  document.getElementById('togglePass').onclick=()=>{password.type=password.type==='password'?'text':'password';togglePass.textContent=password.type==='password'?'Ver':'Ocultar'};
+  app.innerHTML='<div class="login"><div class="login-card"><div class="brand">Scout <span>Fem</span></div><p class="muted">Scouting de fútbol femenino · Acceso</p><form id="login" class="form"><label>Email<input class="input" id="email" value="" autocomplete="username" required></label><label>Contraseña<div style="position:relative"><input class="input" id="password" type="password" value="" autocomplete="current-password" style="padding-right:90px" required><button type="button" id="togglePass" class="btn ghost" style="position:absolute;right:5px;top:5px;padding:6px 9px">Ver</button></div></label><button class="btn" id="loginSubmit" type="submit">Entrar</button></form><div class="actions" style="margin-top:14px;display:grid;gap:9px"><button type="button" class="btn secondary" id="claimBtn">Soy jugadora / reclamar mi perfil</button><button type="button" class="btn ghost" id="registerBtn">Crear una cuenta nueva · Club o agencia</button></div><div class="demo"><b>Acceso online</b><br>Clubes y agencias pueden solicitar una cuenta. El administrador validará el alta antes de habilitar el acceso profesional.</div></div></div>';
+  const email=document.getElementById('email'),password=document.getElementById('password'),submit=document.getElementById('loginSubmit');
+  document.getElementById('togglePass').onclick=()=>{password.type=password.type==='password'?'text':'password';document.getElementById('togglePass').textContent=password.type==='password'?'Ver':'Ocultar'};
   document.getElementById('claimBtn').onclick=()=>playerOnboarding();
   document.getElementById('registerBtn').onclick=()=>registerAccountView();
-  document.getElementById('login').onsubmit=async e=>{e.preventDefault();
+  document.getElementById('login').onsubmit=async e=>{
+    e.preventDefault(); if(submit.disabled)return; submit.disabled=true;submit.textContent='Entrando…';
     try{
-      const sess=await supaSignIn(email.value.trim(),password.value);
-      const rows=await supaFetch('/rest/v1/scout_users?select=id,role,player_id&id=eq.'+encodeURIComponent(sess.user.id));
-      const sr=rows&&rows[0];
-      if(sr && sr.role==='admin'){
-        user={id:'supabase:'+sess.user.id,email:sess.user.email,name:'Administrador',role:'admin',active:true,supabaseId:sess.user.id};
-      }else if(sr){
-        let local=db.users.find(x=>x.email===sess.user.email);
-        user=local||{id:'supabase:'+sess.user.id,email:sess.user.email,name:sess.user.email,role:sr.role,active:true,supabaseId:sess.user.id};
-        user.supabaseId=sess.user.id;
-        // La asociación con el perfil deportivo debe venir de scout_users para las cuentas online.
-        if(sr.role==='player' && sr.player_id) user.playerId=sr.player_id;
-        if(sr.role==='player' && !user.playerId){
-          const linked=await supaFetch('/rest/v1/player_access_requests?select=requested_profile_id,player_name,status,identity_verified&player_email=eq.'+encodeURIComponent(sess.user.email)+'&status=eq.approved&order=created_at.desc&limit=1');
-          const link=linked&&linked[0];
-          if(link&&link.requested_profile_id){
-            user.playerId=link.requested_profile_id;
-            user.name=link.player_name||user.name||sess.user.email;
-          }
-        }
+      const sess=await supaSignIn(email.value.trim().toLowerCase(),password.value);
+      const authId=sess.user.id, authEmail=sess.user.email;
+      const meta=sess.user.user_metadata||{};
+      const scoutRows=await supaFetch('/rest/v1/scout_users?select=id,role,player_id&id=eq.'+encodeURIComponent(authId));
+      const sr=scoutRows&&scoutRows[0];
+      if(sr&&sr.role==='admin'){
+        user={id:'supabase:'+authId,email:authEmail,name:'Administrador',role:'admin',active:true,supabaseId:authId};
       }else{
-        let regs=await supaFetch('/rest/v1/account_registration_requests?select=id,user_id,email,account_type,organization_name,contact_name,phone,status&user_id=eq.'+encodeURIComponent(sess.user.id)+'&limit=1');
-        let reg=regs&&regs[0];
-        const meta=sess.user.user_metadata||{};
-        if(!reg && ['club','agency'].includes(meta.account_type) && meta.organization_name){
-          await supaFetch('/rest/v1/account_registration_requests',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({user_id:sess.user.id,email:sess.user.email,account_type:meta.account_type,organization_name:meta.organization_name,contact_name:meta.contact_name||'',phone:meta.phone||'',status:'pending'})});
-          regs=await supaFetch('/rest/v1/account_registration_requests?select=id,user_id,email,account_type,organization_name,contact_name,phone,status&user_id=eq.'+encodeURIComponent(sess.user.id)+'&limit=1');reg=regs&&regs[0];
-        }
+        // Una solicitud de alta aprobada de club/agencia tiene prioridad sobre roles antiguos
+        // o datos locales de jugadora asociados al mismo correo.
+        const regRows=await supaFetch('/rest/v1/account_registration_requests?select=id,user_id,email,account_type,organization_name,contact_name,phone,status&user_id=eq.'+encodeURIComponent(authId)+'&limit=1');
+        const reg=regRows&&regRows[0];
         if(reg){
           if(reg.status!=='approved'){
             localStorage.removeItem('sf_supa_session');supaSession=null;
             throw new Error(reg.status==='rejected'?'La solicitud de alta ha sido rechazada. Contacta con ScoutFem.':'Tu solicitud de alta está pendiente de validación del administrador.');
           }
-          const role=reg.account_type==='agency'?'agency':'club';const localId='reg_'+reg.id;
-          if(role==='agency'&&!db.agencies.some(a=>a.id===localId))db.agencies.push({id:localId,name:reg.organization_name,contact:reg.contact_name||'',phone:reg.phone||'',email:reg.email,website:'',description:'',logo:''});
-          if(role==='club'&&!db.clubs.some(c=>c.id===localId))db.clubs.push({id:localId,name:reg.organization_name,officialName:reg.organization_name,shortName:reg.organization_name,abbreviation:reg.organization_name.slice(0,12),category:'',competition:'',group:'',season:'2026/27',region:'',parentClub:reg.organization_name,type:'principal'});
-          user={id:'supabase:'+sess.user.id,email:sess.user.email,name:reg.organization_name,role,active:true,supabaseId:sess.user.id,...(role==='agency'?{agencyId:localId}:{clubId:localId})};
-          await supaFetch('/rest/v1/scout_users',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id:sess.user.id,role,email:sess.user.email,name:reg.organization_name,active:true})});save();
+          const role=reg.account_type==='agency'?'agency':'club', localId='reg_'+reg.id;
+          if(role==='agency'){
+            if(!db.agencies.some(a=>a.id===localId))db.agencies.push({id:localId,name:reg.organization_name,contact:reg.contact_name||'',phone:reg.phone||'',email:reg.email,website:'',description:'',logo:''});
+            db.users=(db.users||[]).filter(x=>String(x.email||'').toLowerCase()!==String(authEmail||'').toLowerCase()||!['player','club','agency'].includes(x.role));
+          }else if(!db.clubs.some(c=>c.id===localId)){
+            db.clubs.push({id:localId,name:reg.organization_name,officialName:reg.organization_name,shortName:reg.organization_name,abbreviation:reg.organization_name.slice(0,12),category:'',competition:'',group:'',season:'2026/27',region:'',parentClub:reg.organization_name,type:'principal'});
+          }
+          user={id:'supabase:'+authId,email:authEmail,name:reg.organization_name,role,active:true,supabaseId:authId,...(role==='agency'?{agencyId:localId}:{clubId:localId})};
+          await supaFetch('/rest/v1/scout_users',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id:authId,role,email:authEmail,name:reg.organization_name,active:true,player_id:null})});
+          save();
+        }else if(sr){
+          user={id:'supabase:'+authId,email:authEmail,name:sess.user.user_metadata?.name||authEmail,role:sr.role,active:true,supabaseId:authId};
+          if(sr.role==='player'&&sr.player_id)user.playerId=sr.player_id;
+          if(sr.role==='player'&&!user.playerId){
+            const linked=await supaFetch('/rest/v1/player_access_requests?select=requested_profile_id,player_name,status,identity_verified&player_email=eq.'+encodeURIComponent(authEmail)+'&status=eq.approved&order=created_at.desc&limit=1');
+            const link=linked&&linked[0];if(link&&link.requested_profile_id){user.playerId=link.requested_profile_id;user.name=link.player_name||user.name||authEmail;}
+          }
         }else{
-        // Una jugadora aprobada puede no tener aún fila en scout_users.
-        // La vinculación real queda registrada en player_access_requests.
-        const approved=await supaFetch('/rest/v1/player_access_requests?select=id,requested_profile_id,player_name,status,identity_verified&player_email=eq.'+encodeURIComponent(sess.user.email)+'&status=eq.approved&order=created_at.desc&limit=1');
-        const ar=approved&&approved[0];
-        if(!ar || !ar.requested_profile_id) throw new Error('La cuenta todavía no tiene un perfil de jugadora aprobado.');
-        user={id:'supabase:'+sess.user.id,email:sess.user.email,name:ar.player_name||sess.user.email,role:'player',active:true,supabaseId:sess.user.id,playerId:ar.requested_profile_id};
-        const vp=db.players.find(x=>x.id===ar.requested_profile_id); if(vp){vp.claimStatus='claimed';vp.verification=Object.assign({},vp.verification||{},{status:ar.identity_verified===false?'Reclamada':'Verificada',reviewedAt:vp.verification?.reviewedAt||new Date().toISOString(),clubConfirmed:false});}
+          const approved=await supaFetch('/rest/v1/player_access_requests?select=id,requested_profile_id,player_name,status,identity_verified&player_email=eq.'+encodeURIComponent(authEmail)+'&status=eq.approved&order=created_at.desc&limit=1');
+          const ar=approved&&approved[0];
+          if(!ar||!ar.requested_profile_id)throw new Error('La cuenta todavía no tiene un perfil aprobado. Si es un club o agencia, contacta con el administrador para revisar el alta.');
+          user={id:'supabase:'+authId,email:authEmail,name:ar.player_name||authEmail,role:'player',active:true,supabaseId:authId,playerId:ar.requested_profile_id};
+          const vp=db.players.find(x=>x.id===ar.requested_profile_id);if(vp){vp.claimStatus='claimed';vp.verification=Object.assign({},vp.verification||{},{status:ar.identity_verified===false?'Reclamada':'Verificada',reviewedAt:vp.verification?.reviewedAt||new Date().toISOString(),clubConfirmed:false});}
         }
       }
-      if(user.role==='player' && supaSession?.user?.id){
-        try{
-          await supaFetch('/rest/v1/scout_users',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id:supaSession.user.id,role:'player',email:supaSession.user.email||user.email,name:user.name||user.email,active:true,player_id:user.playerId||null})});
-        }catch(syncErr){console.warn('La sesión funciona, pero no se pudo sincronizar la ficha de usuario:',syncErr)}
+      if(user.role==='player'&&supaSession?.user?.id){
+        try{await supaFetch('/rest/v1/scout_users',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id:authId,role:'player',email:authEmail,name:user.name||authEmail,active:true,player_id:user.playerId||null})});}
+        catch(syncErr){console.warn('La sesión funciona, pero no se pudo sincronizar la ficha de usuario:',syncErr)}
       }
       localStorage.setItem('sf_user_demo',JSON.stringify(user));
-      await syncCloudPlayerProfiles();
-      if(user.role==='player') await loadMyCloudPlayerProfile();
-      await syncScoutFemVerificationFlags();
-      render();
+      await syncCloudPlayerProfiles();if(user.role==='player')await loadMyCloudPlayerProfile();await syncScoutFemVerificationFlags();render();
     }catch(err){
-      let u=db.users.find(x=>x.email===email.value&&x.password===password.value);
-      if(u){user=u;localStorage.setItem('sf_user_demo',JSON.stringify(user));render();return}
+      console.error('ScoutFem · Inicio de sesión',err);
+      localStorage.removeItem('sf_supa_session');supaSession=null;
+      // Solo las cuentas demo locales pueden usar el acceso de demostración.
+      const u=email.value.trim().toLowerCase().endsWith('.local')?db.users.find(x=>x.email===email.value.trim()&&x.password===password.value):null;
+      if(u){user=u;localStorage.setItem('sf_user_demo',JSON.stringify(user));render();return;}
       toast(err.message||'No se ha podido iniciar sesión');
-    }
-  }
+    }finally{if(document.getElementById('loginSubmit')){document.getElementById('loginSubmit').disabled=false;document.getElementById('loginSubmit').textContent='Entrar';}}
+  };
 }
 
 async function registerAccountView(){
